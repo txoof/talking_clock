@@ -1,3 +1,11 @@
+# vscode
+.vscode/*
+
+# voice models
+*.onnx.json
+*.onnx
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +213,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.picowgo
+# BEGIN PYENV_UTILITIES MANAGED BLOCK
+/talking_clock-venv-9aeab2f407
+venv_activate
+.jupyter_kernelspec
+# END PYENV_UTILITIES MANAGED BLOCK
