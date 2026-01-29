@@ -5,6 +5,8 @@
 *.onnx.json
 *.onnx
 
+# micropython
+.micropico
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
