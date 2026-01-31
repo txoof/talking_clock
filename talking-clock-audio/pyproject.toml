@@ -1,0 +1,35 @@
+# talking-clock-audio/pyproject.toml
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "talking_clock_audio"  # Change from "talking-clock-audio"
+version = "0.1.0"
+description = "Generate multilingual time phrase audio files using Piper TTS"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Aaron Ciuffo"}
+]
+
+dependencies = [
+    "huggingface-hub>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[project.scripts]
+tca = "talking_clock_audio.cli:cli"
