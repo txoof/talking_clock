@@ -1,7 +1,54 @@
-from machine import Pin
+from machine import Pin, PWM
 import time
+import struct
+import array
 
-print('Debounce v0.1 - Set Mode')
+print('Debounce v0.7 - WAV Playback with Timing')
+
+class WavPlayer:
+    def __init__(self, pin_num):
+        self.pin_num = pin_num
+        self.pwm = None
+        
+    def play_wav(self, filename):
+        """Play a WAV file (blocking). Assumes 16-bit mono."""
+        with open(filename, 'rb') as f:
+            # Skip WAV header (44 bytes standard)
+            f.seek(44)
+            
+            # Read and play samples in chunks
+            while True:
+                chunk = f.read(512)  # Read 256 samples (512 bytes)
+                if not chunk:
+                    break
+                
+                # Convert to array of signed 16-bit integers
+                samples = array.array('h', chunk)
+                
+                # Play each sample with timing
+                for i, sample in enumerate(samples):
+                    duty = sample + 32768
+                    self.pwm.duty_u16(duty)
+                    
+                    # Timing with periodic yields to keep serial alive
+                    # if i % 50 == 0:  # Every 50 samples
+                    #     time.sleep_ms()  # 2ms sleep allows serial to work
+                    # else:
+                    time.sleep_us(16)  # Normal per-sample delay
+    
+    def play_files(self, filenames):
+        """Play multiple WAV files in sequence."""
+        # Initialize PWM once for all files
+        self.pwm = PWM(Pin(self.pin_num))
+        self.pwm.freq(22050)
+        
+        for filename in filenames:
+            print(f"Playing: {filename}")
+            self.play_wav(filename)
+        
+        # Shut down PWM after all files played
+        self.pwm.deinit()
+        self.pwm = None
 
 class DebounceButton:
     def __init__(self, pin_num, callback):
@@ -22,6 +69,9 @@ minute = 0
 set_mode = None  # None, 'hour', or 'minute'
 hold_start = None
 last_heartbeat = time.ticks_ms()
+
+# Initialize audio player
+player = WavPlayer(21)  # GP21 (physical pin 27)
 
 def check_hold():
     global set_mode, hold_start
@@ -61,6 +111,11 @@ def button_speak_pressed():
     elif set_mode == 'minute':
         set_mode = None
         print(f"exit set mode - Time set to {hour:02d}:{minute:02d}")
+    else:
+        # Normal mode - speak the time
+        print("Speaking time...")
+        files = ['word_half.wav', 'word_past.wav']  # Test files
+        player.play_files(files)
 
 button_plus = DebounceButton(2, button_plus_pressed)
 button_minus = DebounceButton(5, button_minus_pressed)
