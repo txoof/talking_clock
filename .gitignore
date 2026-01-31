@@ -4,6 +4,7 @@
 # voice models
 *.onnx.json
 *.onnx
+**/model*/**
 
 # micropython
 .micropico
@@ -216,6 +217,16 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .picowgo
+# BEGIN PYENV_UTILITIES MANAGED BLOCK
+/talking_clock-venv-9aeab2f407
+venv_activate
+.jupyter_kernelspec
+# END PYENV_UTILITIES MANAGED BLOCK
+# BEGIN PYENV_UTILITIES MANAGED BLOCK
+/talking_clock-venv-9aeab2f407
+venv_activate
+.jupyter_kernelspec
+# END PYENV_UTILITIES MANAGED BLOCK
 # BEGIN PYENV_UTILITIES MANAGED BLOCK
 /talking_clock-venv-9aeab2f407
 venv_activate
