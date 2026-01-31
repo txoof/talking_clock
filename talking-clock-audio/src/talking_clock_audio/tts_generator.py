@@ -44,7 +44,7 @@ def generate_audio_file(text: str, output_path: Path | str,
 
 def generate_audio_package_with_tts(config: Dict[str, Any], mode: str, 
                                      voice_model_path: Path | str,
-                                     output_dir: Path | str) -> Dict[str, Any]:
+                                     output_dir: Path | str = None) -> Dict[str, Any]:
     """Generate audio package with real TTS-generated audio files.
     
     Creates a directory structure with:
@@ -55,11 +55,36 @@ def generate_audio_package_with_tts(config: Dict[str, Any], mode: str,
         config: Loaded YAML configuration.
         mode: Mode name (e.g., 'casual', 'broadcast').
         voice_model_path: Path to .onnx voice model file.
-        output_dir: Output directory path.
+        output_dir: Output directory path. If None, generates path from model info.
         
     Returns:
         Dict with statistics including success/failure counts.
     """
+    voice_model_path = Path(voice_model_path)
+    locale = config['locale']
+    
+    # Extract voice info from model filename
+    # Expected format: locale-voice-quality.onnx (e.g., en_US-lessac-medium.onnx)
+    model_filename = voice_model_path.stem  # Gets filename without extension
+    
+    try:
+        # Parse the filename
+        parts = model_filename.split('-')
+        if len(parts) >= 3:
+            voice_name = parts[1]
+            quality = parts[2]
+        else:
+            # Fallback if filename doesn't match expected pattern
+            voice_name = 'unknown'
+            quality = 'unknown'
+    except:
+        voice_name = 'unknown'
+        quality = 'unknown'
+    
+    # Generate output directory if not provided
+    if output_dir is None:
+        output_dir = f"audio/{locale}_{voice_name}_{quality}_{mode}"
+    
     output_path = Path(output_dir)
     audio_path = output_path / 'audio'
     
@@ -109,6 +134,8 @@ def generate_audio_package_with_tts(config: Dict[str, Any], mode: str,
     package_config = {
         'locale': config['locale'],
         'mode': mode,
+        'voice': voice_name,
+        'quality': quality,
         'vocab_files': vocab_map,
         'rules': rules
     }

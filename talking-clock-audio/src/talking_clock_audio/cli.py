@@ -262,7 +262,7 @@ def validate_config(yaml_path, mode, samples):
 @click.option('--model', required=True, 
               help='Path to voice model .onnx file (e.g., ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx)')
 @click.option('--output-dir', default=None,
-              help='Output directory (default: audio/<locale>_<mode>)')
+              help='Output directory (default: audio/<locale>_<voice>_<quality>_<mode>)')
 @click.option('--force', is_flag=True,
               help='Overwrite existing files without warning')
 def generate_audio(yaml_path, mode, model, output_dir, force):
@@ -306,27 +306,43 @@ def generate_audio(yaml_path, mode, model, output_dir, force):
             click.echo("  tca list-models --remote")
             raise click.Abort()
         
-        # Determine output directory
+        # output_dir is now handled by generate_audio_package_with_tts
+        # It will auto-generate if None
+        
+        # Check if output exists (need to calculate default path if not specified)
         if output_dir is None:
-            output_dir = f"audio/{locale}_{mode}"
+            # Extract voice info from model path to show warning message
+            model_filename = model_path.stem
+            try:
+                parts = model_filename.split('-')
+                if len(parts) >= 3:
+                    voice_name = parts[1]
+                    quality = parts[2]
+                    default_output = f"audio/{locale}_{voice_name}_{quality}_{mode}"
+                else:
+                    default_output = f"audio/{locale}_unknown_unknown_{mode}"
+            except:
+                default_output = f"audio/{locale}_unknown_unknown_{mode}"
+            
+            output_path = Path(default_output)
+            click.echo(f"Output directory: {default_output}")
+        else:
+            output_path = Path(output_dir)
+            click.echo(f"Output directory: {output_dir}")
         
-        output_path = Path(output_dir)
-        
-        # Check if output exists
         if output_path.exists() and not force:
             audio_dir = output_path / 'audio'
             if audio_dir.exists() and list(audio_dir.glob('*.wav')):
-                click.echo(f"\nWarning: Output directory already exists: {output_dir}")
+                click.echo(f"\nWarning: Output directory already exists")
                 click.echo("Existing audio files will be overwritten.")
                 if not click.confirm("Continue?"):
                     click.echo("Aborted.")
                     return
         
-        click.echo(f"Output directory: {output_dir}")
         click.echo(f"Voice model: {model}")
         click.echo("\nGenerating audio files...")
         
-        # Generate
+        # Generate (output_dir can be None, function will auto-generate)
         stats = generate_audio_package_with_tts(config, mode, str(model_path), output_dir)
         
         # Report results
