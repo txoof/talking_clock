@@ -2,6 +2,7 @@ use <./scad_libraries/finger_joint_box.scad>
 use <./scad_libraries/voronoi.scad>
 use<./scad_libraries/arcade_button.scad>
 use<./scad_libraries/cone_speaker.scad>
+use<./scad_libraries/potentiometer.scad>
 
 
 /*[Project Setup]*/
@@ -43,10 +44,18 @@ switchX = 0;
 // Switch Y position (on lid) from center
 switchY = 0;
 
-// USB Overmolding X
+// USB Connector Overmolding X 
 usbOverX = 15;
-// USB Overmolding Y
+// USB Connector Overmolding Y
 usbOverY = 9;
+
+// Potentiometer 
+potXpos = clockX/3 *2;
+potZpos = clockZ/3 *2;
+potBodyDim = [10, 12, 8.4];
+potBushingDia = 9;
+potBushingLen = 5;
+
 
 /* [Look and Feel] */
 //radius of chamfers for curved edges
@@ -227,18 +236,23 @@ module back() {
     union() {
         difference() {
             faceA(caseSize, finger, lidFinger, material, 0);
-            my_random_voronoi(caseSize[0]-vor_border, caseSize[2]-vor_border, n=50, round=vor_round, thickness=vor_thick, center=true);
+            // my_random_voronoi(caseSize[0]-vor_border, caseSize[2]-vor_border, n=50, round=vor_round, thickness=vor_thick, center=true);
    
 
             translate([clockX/2 - (usbOverX + cutout_border *2 ) - material - 3, - clockZ/2 + material, 0]) {
                 port(dim=[usbOverX, usbOverY], r=chamfer_r, cutter=true);
             }
+            // translate([clockX/2 - potXpos, clockZ/2 - potZpos, 0]) {
+            //     potentiometer_cutter(bushing_dia=9, shaft_dia=6);
+            // }
+
         }
         // # patch the finger joints
         // color("red")
         translate([clockX/2 - usbPortFingerPatch/2 - foot_x, - clockZ/2 + material/2, 0]) {
             square([usbPortFingerPatch, material,], center=true);
         }
+
 
         translate([clockX/2 - (usbOverX + cutout_border *2 ) - material - 3, - clockZ/2 + material, 0]) {
             port(dim=[usbOverX, usbOverY], r=chamfer_r);
@@ -310,6 +324,14 @@ module layout(threeD=true) {
         // speaker(dia=speakerDia, height=speakerHeight);
         speaker();
     }
+
+    
+    // translate([clockX/2 - potXpos, clockY/2 - material - potBodyDim[2]/2, clockZ-potZpos - material/2]) {
+    //     rotate([-90, 0, 0]) {
+    //         color("gray")
+    //         potentiometer(body_dim=potBodyDim, bushing_dia=potBushingDia, bushing_len=potBushingLen);
+    //     }
+    // }
 
     translate([switchX, switchY , clockZ - material/2]) {
         arcadeSwitch();
