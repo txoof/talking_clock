@@ -715,7 +715,7 @@ If you create a configuration for a new language:
 1. Test thoroughly with all four modes
 2. Include comprehensive `rendered_examples`
 3. Add notes about language-specific patterns
-4. Submit a pull request with your YAML file
+4. Submit a pull request with your YAML file and the generated sound files
 
 ## Advanced: Custom Modes
 
