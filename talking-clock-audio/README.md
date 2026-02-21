@@ -165,9 +165,21 @@ tca generate --yaml <file> --mode casual --model <path> --force
 tca generate --yaml <file> --mode casual --model <path> \
   --speaker-threshold 24000
 
+# Adjust high-pass filter cutoff (removes low frequencies)
+tca generate --yaml <file> --mode casual --model <path> \
+  --highpass-cutoff 500
+
 # Disable soft limiter for high-quality speakers
 tca generate --yaml <file> --mode casual --model <path> \
   --speaker-threshold 32767
+
+# Disable high-pass filter
+tca generate --yaml <file> --mode casual --model <path> \
+  --highpass-cutoff 0
+
+# Disable all processing (raw TTS output)
+tca generate --yaml <file> --mode casual --model <path> \
+  --speaker-threshold 32767 --highpass-cutoff 0
 ```
 
 ## Speaking Modes
@@ -190,7 +202,7 @@ Generated packages follow this structure:
 ```
 audio/
   en_US_lessac_medium_casual/
-    config.json              # Pico-compatible configuration
+    vocab.json               # Vocabulary mapping (vocab keys to filenames)
     audio/                   # Audio files directory
       word_midnight.wav
       word_past.wav
@@ -200,62 +212,88 @@ audio/
       ... (70-80 files typically)
 ```
 
-**config.json format:**
+**vocab.json format:**
 
 ```json
 {
-  "locale": "en_US",
-  "mode": "casual",
-  "voice": "lessac",
-  "quality": "medium",
-  "vocab_files": {
-    "words.midnight": "word_midnight.wav",
-    "number_words.11": "number_eleven.wav"
-  },
-  "rules": [
-    {
-      "when": {"hour_24": 11, "minute": 30},
-      "tokens": ["words.half", "words.past", "number_words.11"]
-    }
-  ]
+  "words.midnight": "word_midnight.wav",
+  "words.past": "word_past.wav",
+  "words.half": "word_half.wav",
+  "number_words.0": "number_zero.wav",
+  "number_words.11": "number_eleven.wav"
 }
 ```
 
-Rules are pre-computed for all 1,440 possible times (24 hours x 60 minutes), making Pico runtime lookup trivial.
+The vocabulary mapping is compact and loaded once at startup. Your Pico code uses the phrase generation logic to determine which vocab entries are needed for any given time, then looks them up in vocab.json to get the filenames.
 
 ## Using on Raspberry Pi Pico
 
-Copy the generated package directory to your Pico's storage (SD card or internal flash if using compressed audio).
+Copy the generated package directory to your Pico's SD card.
 
-**Runtime code:**
+**Your Pico code needs to:**
+
+1. Load the YAML rules (you'll port the phrase_generator logic to CircuitPython)
+2. Load vocab.json to map vocab keys to filenames
+3. Evaluate rules for current time to get token list
+4. Look up filenames in vocab.json
+5. Play audio files in sequence
+
+**Example approach:**
 
 ```python
-from talking_clock_audio.pico_audio import load_config, get_audio_files_for_time_fast
+import json
 
-# Load config once at startup
-config = load_config('/sd/audio/en_US_lessac_medium_casual/config.json')
+# Load vocab mapping once at startup
+with open('/sd/audio/en_US_lessac_medium_casual/vocab.json', 'r') as f:
+    vocab = json.load(f)
 
 # In your main loop when button pressed:
-hour = rtc.hour  # Get from RTC
+hour = rtc.hour
 minute = rtc.minute
 
-# Get list of audio files to play
-files = get_audio_files_for_time_fast(config, hour, minute)
+# Your ported phrase generation logic determines tokens
+# (This is the rule evaluation from phrase_generator.py)
+tokens = generate_tokens_for_time(hour, minute)  # You implement this
 
-# Play each file in sequence
-for filename in files:
+# Look up filenames
+for token in tokens:
+    filename = vocab[token]
     play_wav(f'/sd/audio/en_US_lessac_medium_casual/audio/{filename}')
 ```
 
-See `src/talking_clock_audio/pico_audio.py` for the complete runtime API.
+You'll need to port the rule evaluation logic from phrase_generator.py to CircuitPython. The advantage of the new structure is that vocab.json is small (a few KB) and can stay in RAM, while the YAML rules can be embedded in your Pico code or stored separately.
 
 ## Small Speaker Compatibility
 
-Piper TTS generates audio at full dynamic range, which can cause distortion on small speakers (40mm or smaller, 3W or less). The built-in soft limiter solves this by gently compressing loud peaks while leaving quiet speech unchanged.
+Piper TTS generates audio at full dynamic range, which can cause distortion on small speakers (40mm or smaller, 3W or less). The built-in audio processing features solve this:
 
-**Default behavior:**
+1. **High-pass filter**: Removes low-frequency content that small speakers cannot reproduce cleanly
+2. **Soft limiter**: Gently compresses loud peaks while leaving quiet speech unchanged
 
-The soft limiter is enabled by default with threshold=16000, optimized for small 4-ohm speakers.
+Both are enabled by default with settings optimized for small 4-ohm speakers.
+
+### High-Pass Filter
+
+Small speakers struggle to reproduce low frequencies (below 200-400Hz). When they try, the cone excursion becomes excessive, causing distortion and reducing clarity. The high-pass filter attenuates these frequencies, resulting in clearer speech.
+
+**Default:** 300Hz cutoff (enabled)
+
+**Custom cutoff:**
+
+```bash
+# More aggressive filtering (for very small speakers)
+tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 500
+
+# Mild filtering (for medium speakers)
+tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 200
+
+# Disable filtering (for full-range speakers)
+tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 0
+```
+
+### Soft Limiter
+
+**Default:** threshold=16000, optimized for small 4-ohm speakers.
 
 **Custom threshold:**
 
@@ -351,8 +389,7 @@ talking-clock-audio/
       __init__.py              # Package initialization & logging
       voice_manager.py         # Hugging Face voice model management
       phrase_generator.py      # YAML parsing & phrase generation
-      tts_generator.py         # Piper TTS audio generation
-      pico_audio.py            # Raspberry Pi Pico runtime functions
+      tts_generator.py         # Piper TTS audio generation with speaker processing
       cli.py                   # Command-line interface
   tests/
     test_voice_manager.py      # Voice management tests
