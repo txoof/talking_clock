@@ -7,7 +7,9 @@ import click
 from pathlib import Path
 
 from .phrase_generator import load_time_phrases, generate_audio_package
-from .tts_generator import generate_audio_package_with_tts
+from .tts_generator import (generate_audio_package_with_tts,
+                             DEFAULT_SPEAKER_THRESHOLD,
+                             DEFAULT_HIGHPASS_CUTOFF)
 from .voice_manager import get_available_voices
 
 
@@ -70,7 +72,6 @@ def list_models(source, model_dir):
         click.echo("Fetching available models from Hugging Face...")
         voices = get_available_voices()
         
-        # Group by locale
         by_locale = {}
         for v in voices:
             if v.locale not in by_locale:
@@ -83,7 +84,6 @@ def list_models(source, model_dir):
             locale_name = get_locale_name(locale)
             click.echo(f"{locale} - {locale_name}:")
             for v in sorted(by_locale[locale], key=lambda x: (x.voice_name, x.quality)):
-                # Show path in format expected by get-model command
                 path = f"  {v.locale}/{v.voice_name}/{v.quality}"
                 click.echo(path)
             click.echo()
@@ -95,7 +95,6 @@ def list_models(source, model_dir):
             click.echo("Use --model-dir to specify a different location")
             return
         
-        # Find .onnx files (exclude .onnx.json files)
         onnx_files = [f for f in model_path.rglob('*.onnx') 
                       if not f.name.endswith('.onnx.json')]
         
@@ -108,7 +107,6 @@ def list_models(source, model_dir):
         click.echo(f"Found {len(onnx_files)} local models in {model_dir}:\n")
         
         for onnx_file in sorted(onnx_files):
-            # Show full path from model_dir
             click.echo(f"  {onnx_file}")
 
 
@@ -129,7 +127,6 @@ def get_model(model_path, model_dir):
     from huggingface_hub import hf_hub_download
     
     try:
-        # Parse model path
         parts = model_path.split('/')
         if len(parts) != 3:
             click.echo("Error: Model path must be in format: locale/voice/quality", err=True)
@@ -139,9 +136,8 @@ def get_model(model_path, model_dir):
             raise click.Abort()
         
         locale, voice_name, quality = parts
-        language = locale.split('_')[0]  # Extract language from locale (e.g., 'en' from 'en_US')
+        language = locale.split('_')[0]
         
-        # Construct Hugging Face paths
         base_path = f"{language}/{locale}/{voice_name}/{quality}"
         model_filename = f"{locale}-{voice_name}-{quality}.onnx"
         config_filename = f"{model_filename}.json"
@@ -154,7 +150,6 @@ def get_model(model_path, model_dir):
         
         repo_id = "rhasspy/piper-voices"
         
-        # Download .onnx file
         click.echo(f"\nDownloading {model_filename}...")
         onnx_file = hf_hub_download(
             repo_id=repo_id,
@@ -163,7 +158,6 @@ def get_model(model_path, model_dir):
             local_dir_use_symlinks=False
         )
         
-        # Download .onnx.json config file
         click.echo(f"Downloading {config_filename}...")
         config_file = hf_hub_download(
             repo_id=repo_id,
@@ -218,11 +212,9 @@ def validate_config(yaml_path, mode, samples):
             click.echo(f"Available modes: {', '.join(config['modes'].keys())}")
             return
         
-        # Get vocab info
         vocab_map, audio_files = get_all_vocab_with_dedup(config)
         click.echo(f"\nVocabulary: {len(audio_files)} unique audio files needed")
         
-        # Show sample times
         click.echo(f"\nSample phrases for mode '{mode}':")
         
         test_times = [
@@ -238,7 +230,6 @@ def validate_config(yaml_path, mode, samples):
         for hour, minute, description in test_times[:samples]:
             tokens = generate_phrase_tokens(config, mode, hour, minute)
             if tokens:
-                # Convert tokens to text
                 words = []
                 for token in tokens:
                     if token in vocab_map:
@@ -259,13 +250,24 @@ def validate_config(yaml_path, mode, samples):
 @cli.command('generate')
 @click.argument('yaml_path', type=click.Path(exists=True))
 @click.argument('mode')
-@click.option('--model', required=True, 
+@click.option('--model', required=True,
               help='Path to voice model .onnx file (e.g., ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx)')
 @click.option('--output-dir', default=None,
               help='Output directory (default: audio/<locale>_<voice>_<quality>_<mode>)')
 @click.option('--force', is_flag=True,
               help='Overwrite existing files without warning')
-def generate_audio(yaml_path, mode, model, output_dir, force):
+@click.option('--speaker-threshold', default=DEFAULT_SPEAKER_THRESHOLD,
+              type=click.IntRange(0, 32767),
+              show_default=True,
+              help='Soft limiter threshold for small speaker compatibility (0-32767). '
+                   'Lower values compress more aggressively. Set to 32767 to disable.')
+@click.option('--highpass-cutoff', default=DEFAULT_HIGHPASS_CUTOFF,
+              type=click.IntRange(0, 22050),
+              show_default=True,
+              help='High-pass filter cutoff in Hz. Removes low-frequency content '
+                   'that small speakers cannot reproduce cleanly. Set to 0 to disable.')
+def generate_audio(yaml_path, mode, model, output_dir, force,
+                   speaker_threshold, highpass_cutoff):
     """Generate audio files for a time phrase configuration.
     
     \b
@@ -282,22 +284,20 @@ def generate_audio(yaml_path, mode, model, output_dir, force):
     \b
     Example:
       tca generate time_phrases_en_US.yaml casual --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+      tca generate time_phrases_en_US.yaml casual --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx --highpass-cutoff 0 --speaker-threshold 32767
     """
     try:
-        # Load configuration
         config = load_time_phrases(yaml_path)
         locale = config['locale']
         
         click.echo(f"Configuration: {locale}")
         click.echo(f"Mode: {mode}")
         
-        # Validate mode
         if mode not in config['modes']:
             click.echo(f"Error: Mode '{mode}' not found in configuration", err=True)
             click.echo(f"Available modes: {', '.join(config['modes'].keys())}")
             raise click.Abort()
         
-        # Check model file exists
         model_path = Path(model)
         if not model_path.exists():
             click.echo(f"Error: Model file not found: {model}", err=True)
@@ -306,12 +306,7 @@ def generate_audio(yaml_path, mode, model, output_dir, force):
             click.echo("  tca list-models --remote")
             raise click.Abort()
         
-        # output_dir is now handled by generate_audio_package_with_tts
-        # It will auto-generate if None
-        
-        # Check if output exists (need to calculate default path if not specified)
         if output_dir is None:
-            # Extract voice info from model path to show warning message
             model_filename = model_path.stem
             try:
                 parts = model_filename.split('-')
@@ -329,7 +324,20 @@ def generate_audio(yaml_path, mode, model, output_dir, force):
         else:
             output_path = Path(output_dir)
             click.echo(f"Output directory: {output_dir}")
-        
+
+        effective_threshold = None if speaker_threshold == 32767 else speaker_threshold
+        effective_cutoff = None if highpass_cutoff == 0 else highpass_cutoff
+
+        if effective_cutoff is not None:
+            click.echo(f"High-pass filter cutoff: {effective_cutoff}Hz")
+        else:
+            click.echo("High-pass filter: disabled")
+
+        if effective_threshold is not None:
+            click.echo(f"Soft limiter threshold: {effective_threshold}")
+        else:
+            click.echo("Soft limiter: disabled")
+
         if output_path.exists() and not force:
             audio_dir = output_path / 'audio'
             if audio_dir.exists() and list(audio_dir.glob('*.wav')):
@@ -342,23 +350,24 @@ def generate_audio(yaml_path, mode, model, output_dir, force):
         click.echo(f"Voice model: {model}")
         click.echo("\nGenerating audio files...")
         
-        # Generate (output_dir can be None, function will auto-generate)
-        stats = generate_audio_package_with_tts(config, mode, str(model_path), output_dir)
+        stats = generate_audio_package_with_tts(
+            config, mode, str(model_path), output_dir,
+            speaker_threshold=effective_threshold,
+            highpass_cutoff=effective_cutoff
+        )
         
-        # Report results
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")
         click.echo("="*60)
-        click.echo(f"Config file: {stats['config_file']}")
+        click.echo(f"Vocab file: {stats['vocab_file']}")
         click.echo(f"Audio files: {stats['audio_dir']}")
-        click.echo(f"Time rules: {stats['rules_count']}")
         click.echo(f"\nAudio generation:")
         click.echo(f"  Success: {stats['success_count']}/{stats['total_audio_files']}")
         click.echo(f"  Failed: {stats['failure_count']}")
         
         if stats['failed_files']:
             click.echo(f"\nFailed files:")
-            for filename, text in stats['failed_files'][:5]:  # Show first 5
+            for filename, text in stats['failed_files'][:5]:
                 click.echo(f"  {filename}: '{text}'")
             if len(stats['failed_files']) > 5:
                 click.echo(f"  ... and {len(stats['failed_files']) - 5} more")
