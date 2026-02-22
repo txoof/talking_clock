@@ -1,3 +1,8 @@
+import time
+# allow i2s devices to wake up fully
+time.sleep(3)
+print("start")
+
 import board
 import busio
 import digitalio
@@ -8,7 +13,7 @@ import audiocore
 import audiomixer
 import keypad
 import json
-import time
+
 import adafruit_ds3231
 
 # SD card - must be initialized before any other SPI peripheral
@@ -50,7 +55,7 @@ audio.play(mixer)
 # --- Configuration ---
 CONFIG_PATH = "/sd/configuration.json"
 VOLUME_STEPS = 10
-VOLUME_SAVE_DELAY = 10.0  # seconds after last change before writing to SD
+VOLUME_SAVE_DELAY = 5.5  # seconds after last change before writing to SD
 HOLD_SECONDS = 3.0        # hold duration to enter set mode
 
 def load_config():
