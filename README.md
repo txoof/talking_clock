@@ -2,6 +2,24 @@
 
 Accessible clock that announces the time
 
+# Talking Clock - To Do
+
+## Bugs
+
+- [ ] Long-press of the announcement button does not appear to exit the menu
+
+## Firmware / Features
+
+- [ ] Need to make sure time announcement works as expected
+- [ ] Need to build out alarm
+
+## UX / Audio
+
+- [ ] When setting the alarm, AM and PM (or equivalent) must be used in all cases
+- [ ] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
+- [ ] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
+- [ ] Need sound effects for alarm
+
 ## Audio sample requirements
 
 All WAV files must match the mixer configuration exactly. Files that do not match
