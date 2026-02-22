@@ -1,5 +1,11 @@
+# CircuitPythonSync
+**/libArchive/
+cpfiles.bak
+**/stubArchive
+
 # vscode
-.vscode/*
+**/.vscode/*
+
 
 # voice models
 *.onnx.json
