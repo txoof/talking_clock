@@ -12,6 +12,8 @@ Accessible clock that announces the time
 
 - [ ] Need to make sure time announcement works as expected
 - [ ] Need to build out alarm
+- [ ] Print menu levels to serial terminal for debugging
+- [ ] Implement new rules on clock to use updated voice model vocabulary and rules
 
 ## UX / Audio
 
@@ -19,6 +21,17 @@ Accessible clock that announces the time
 - [ ] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
 - [ ] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
 - [ ] Need sound effects for alarm
+
+## Audio Package
+
+- [ ] Add a vocabulary item for the name of the current voice
+- [x] Build out better rules for operational, broadcast, etc.
+- [x] Build test cases for rules
+- [x] Update tca to generate one directory per voice model with rule files and all samples
+
+## Localization
+
+- [x] Verify Dutch time logic produces natural phrasing (e.g. 8:10 should be "acht tien" not "tien over acht")
 
 ## Audio sample requirements
 

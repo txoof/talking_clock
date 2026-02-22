@@ -11,6 +11,7 @@ from .phrase_generator import load_time_phrases
 from .tts_generator import (generate_audio_package_with_tts,
                              DEFAULT_SPEAKER_THRESHOLD,
                              DEFAULT_HIGHPASS_CUTOFF)
+from .rules_generator import write_all_rules, generate_rules, load_yaml
 from .voice_manager import get_available_voices
 
 
@@ -239,98 +240,227 @@ def get_model(locale, voice, quality, model_dir):
 
 
 @cli.command('validate')
-@click.option('--yaml', 'yaml_path', type=click.Path(exists=True), 
+@click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
               help='Path to time phrase configuration file')
-@click.option('--mode', help='Speaking style (operational/broadcast/standard/casual)')
-@click.option('--samples', default=7, help='Number of sample times to show (default: 7)')
+@click.option('--mode', help='Validate a specific mode only (default: all modes)')
+@click.option('--samples', default=7, help='Number of sample times to show per mode (default: 7)')
 def validate_config(yaml_path, mode, samples):
     """Validate a time phrase configuration and show sample outputs.
-    
+
+    For each mode, runs both the phrase_generator (reference) and the
+    pico_rules evaluator and compares their output. Also checks every
+    rendered_example in the YAML. Reports any disagreements.
+
     \b
     Interactive mode (prompts for missing options):
       tca validate
-    
+
     \b
     Expert mode:
+      tca validate --yaml time_phrases_en_US.yaml
       tca validate --yaml time_phrases_en_US.yaml --mode casual
     """
+    import sys
+    from pathlib import Path as _Path
     from .phrase_generator import generate_phrase_tokens, get_all_vocab_with_dedup
-    
+
+    # Locate pico_rules relative to this package installation.
+    # It lives in clock_code/ at the repo root, two levels up from src/.
+    _pkg_dir = _Path(__file__).parent          # src/talking_clock_audio/
+    _src_dir = _pkg_dir.parent                  # src/
+    _repo_root = _src_dir.parent               # talking-clock-audio/
+    _clock_code = _repo_root.parent / "clock_code"
+    if str(_clock_code) not in sys.path:
+        sys.path.insert(0, str(_clock_code))
+
     try:
-        # Interactive prompts for missing options
+        import pico_rules as _pico_rules
+    except ImportError:
+        click.echo(
+            "Warning: pico_rules not found in clock_code/. "
+            "Pico-side validation will be skipped.", err=True
+        )
+        _pico_rules = None
+
+    try:
         if not yaml_path:
             yaml_files = find_yaml_files()
-            
             if not yaml_files:
                 click.echo("No YAML configuration files found.")
                 click.echo("Looking in: ., time_formats/, */")
                 return
-            
             choices = [str(f) for f in yaml_files]
             yaml_path = questionary.select(
                 "Select configuration file:",
                 choices=choices
             ).ask()
-            
             if not yaml_path:
                 click.echo("Cancelled.")
                 return
-        
+
         config = load_time_phrases(yaml_path)
-        
-        if not mode:
-            modes = list(config['modes'].keys())
-            mode = questionary.select(
-                "Select mode:",
-                choices=modes
-            ).ask()
-            
-            if not mode:
-                click.echo("Cancelled.")
-                return
-        
-        click.echo(f"\nConfiguration: {config['locale']}")
-        click.echo(f"Mode: {mode}")
-        
-        if mode not in config['modes']:
-            click.echo(f"Error: Mode '{mode}' not found", err=True)
-            click.echo(f"Available: {', '.join(config['modes'].keys())}")
+        locale = config['locale']
+        all_modes = list(config['modes'].keys())
+
+        if mode and mode not in config['modes']:
+            click.echo(f"Error: Mode '{mode}' not found. Available: {', '.join(all_modes)}", err=True)
             return
-        
+
+        modes_to_check = [mode] if mode else all_modes
+
         vocab_map, audio_files = get_all_vocab_with_dedup(config)
-        click.echo(f"Vocabulary: {len(audio_files)} unique audio files\n")
-        
-        click.echo(f"Sample phrases:")
-        
-        test_times = [
+        file_to_key = {v: k for k, v in vocab_map.items()}
+
+        # Build pico rules and vocab once if pico_rules is available
+        if _pico_rules:
+            pico_rules_data = generate_rules(config)
+        else:
+            pico_rules_data = None
+
+        def tokens_to_text(token_keys):
+            """Reconstruct spoken text from a list of vocab keys."""
+            words = []
+            for key in token_keys:
+                section, entry = key.split(".", 1)
+                try:
+                    entry = int(entry)
+                except ValueError:
+                    pass
+                text = config["vocab"].get(section, {}).get(entry)
+                if text:
+                    words.append(text)
+            return " ".join(words)
+
+        def files_to_text(filenames):
+            """Reconstruct spoken text from a list of audio filenames."""
+            keys = [file_to_key.get(f) for f in filenames if file_to_key.get(f)]
+            return tokens_to_text(keys)
+
+        sample_times = [
             (0, 0, "midnight"),
             (6, 0, "early morning"),
+            (11, 7, "mid morning"),
             (11, 30, "late morning"),
             (12, 0, "noon"),
             (13, 45, "afternoon"),
             (18, 30, "evening"),
             (23, 0, "late night"),
         ]
-        
-        for hour, minute, description in test_times[:samples]:
-            tokens = generate_phrase_tokens(config, mode, hour, minute)
-            if tokens:
-                words = []
-                for token in tokens:
-                    if token in vocab_map:
-                        filename = vocab_map[token]
-                        text = audio_files[filename]
-                        words.append(text)
-                
-                phrase = ' '.join(words)
-                click.echo(f"  {hour:02d}:{minute:02d} ({description:12s}): {phrase}")
-        
-        click.echo("\nConfiguration is valid!")
-        
-        # Show command to repeat
+
+        total_errors = 0
+
+        click.echo(f"\nLocale: {locale}")
+        click.echo(f"Vocab: {len(audio_files)} unique audio files")
+
+        for check_mode in modes_to_check:
+            click.echo(f"\n{'='*60}")
+            click.echo(f"Mode: {check_mode}")
+            click.echo(f"{'='*60}")
+
+            mode_errors = 0
+
+            # --- Sample phrases table ---
+            click.echo(f"\nSample phrases:")
+            click.echo(f"  {'Time':<8} {'Description':<14} {'Generated'}")
+            click.echo(f"  {'-'*7} {'-'*13} {'-'*35}")
+
+            for hour, minute, description in sample_times[:samples]:
+                ref_tokens = generate_phrase_tokens(config, check_mode, hour, minute)
+                if ref_tokens:
+                    phrase = tokens_to_text(ref_tokens)
+                    click.echo(f"  {hour:02d}:{minute:02d}  {description:<14} {phrase}")
+                else:
+                    click.echo(f"  {hour:02d}:{minute:02d}  {description:<14} [NO MATCH]")
+                    mode_errors += 1
+
+            # --- rendered_examples check ---
+            rendered = config.get("rendered_examples", {})
+            if rendered:
+                click.echo(f"\nChecking rendered_examples:")
+                example_errors = []
+
+                for _group, times in rendered.items():
+                    for time_val, mode_phrases in times.items():
+                        if check_mode not in mode_phrases:
+                            continue
+
+                        # YAML parses HH:MM as integer seconds (H*60+M)
+                        if isinstance(time_val, int):
+                            h, m = time_val // 60, time_val % 60
+                        else:
+                            h, m = (int(x) for x in str(time_val).split(":"))
+
+                        expected = mode_phrases[check_mode]
+                        ref_tokens = generate_phrase_tokens(config, check_mode, h, m)
+                        got = tokens_to_text(ref_tokens) if ref_tokens else "[NO MATCH]"
+
+                        if got != expected:
+                            example_errors.append(
+                                f"  {h:02d}:{m:02d}  expected: {expected!r}\n"
+                                f"         got:      {got!r}"
+                            )
+
+                        # Pico cross-check
+                        if pico_rules_data:
+                            pico_files = _pico_rules.get_audio_files(
+                                pico_rules_data, vocab_map, check_mode, h, m
+                            )
+                            pico_text = files_to_text(pico_files) if pico_files else "[NO MATCH]"
+                            if pico_text != expected:
+                                example_errors.append(
+                                    f"  {h:02d}:{m:02d}  pico expected: {expected!r}\n"
+                                    f"         pico got:      {pico_text!r}"
+                                )
+
+                if example_errors:
+                    click.echo(f"  FAIL: {len(example_errors)} example(s) did not match:")
+                    for err in example_errors:
+                        click.echo(err)
+                    mode_errors += len(example_errors)
+                else:
+                    example_count = sum(
+                        1 for times in rendered.values()
+                        for mode_phrases in times.values()
+                        if check_mode in mode_phrases
+                    )
+                    click.echo(f"  OK: all {example_count} examples matched")
+
+            # --- Coverage check: all 1440 times ---
+            coverage_failures = []
+            for h in range(24):
+                for m in range(60):
+                    if not generate_phrase_tokens(config, check_mode, h, m):
+                        coverage_failures.append(f"{h:02d}:{m:02d}")
+
+            if coverage_failures:
+                click.echo(f"\nCoverage: FAIL - {len(coverage_failures)} times produce no output")
+                for t in coverage_failures[:10]:
+                    click.echo(f"  {t}")
+                if len(coverage_failures) > 10:
+                    click.echo(f"  ... and {len(coverage_failures) - 10} more")
+                mode_errors += len(coverage_failures)
+            else:
+                click.echo(f"\nCoverage: OK - all 1440 times matched")
+
+            total_errors += mode_errors
+            if mode_errors:
+                click.echo(f"\nMode result: FAIL ({mode_errors} error(s))")
+            else:
+                click.echo(f"\nMode result: OK")
+
+        click.echo(f"\n{'='*60}")
+        if total_errors:
+            click.echo(f"Validation FAILED: {total_errors} total error(s)")
+        else:
+            click.echo(f"Validation PASSED")
+        click.echo(f"{'='*60}")
+
         click.echo("\nTo repeat this operation:")
-        click.echo(f"  tca validate --yaml {yaml_path} --mode {mode}")
-        
+        cmd = f"  tca validate --yaml {yaml_path}"
+        if mode:
+            cmd += f" --mode {mode}"
+        click.echo(cmd)
+
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise click.Abort()
@@ -339,10 +469,9 @@ def validate_config(yaml_path, mode, samples):
 @cli.command('generate')
 @click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
               help='Path to time phrase configuration file')
-@click.option('--mode', help='Speaking style (operational/broadcast/standard/casual)')
 @click.option('--model', help='Path to voice model .onnx file')
 @click.option('--output-dir', default=None,
-              help='Output directory (default: audio/<locale>_<voice>_<quality>_<mode>)')
+              help='Output directory (default: audio/<locale>_<voice>_<quality>)')
 @click.option('--force', is_flag=True,
               help='Overwrite existing files without warning')
 @click.option('--speaker-threshold', default=DEFAULT_SPEAKER_THRESHOLD,
@@ -351,79 +480,50 @@ def validate_config(yaml_path, mode, samples):
 @click.option('--highpass-cutoff', default=DEFAULT_HIGHPASS_CUTOFF,
               type=click.IntRange(0, 22050),
               help='High-pass filter cutoff in Hz (default: 300). Set to 0 to disable.')
-def generate_audio(yaml_path, mode, model, output_dir, force, speaker_threshold, highpass_cutoff):
+def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highpass_cutoff):
     """Generate audio files for a time phrase configuration.
-    
+
+    Generates audio for all modes defined in the YAML in a single run.
+    All modes share one set of WAV files. Per-mode rules are written to
+    a rules/ subdirectory.
+
     \b
     Interactive mode (prompts for missing options):
       tca generate
-    
+
     \b
     Expert mode (all options specified):
-      tca generate --yaml time_phrases_en_US.yaml --mode casual --model ./models/.../model.onnx
-    
-    \b
-    Mixed mode:
-      tca generate --yaml time_phrases_en_US.yaml
-      (prompts for --mode and --model)
+      tca generate --yaml time_phrases_en_US.yaml --model ./models/.../model.onnx
     """
     try:
         # Interactive prompt for YAML
         if not yaml_path:
             yaml_files = find_yaml_files()
-            
+
             if not yaml_files:
                 click.echo("No YAML configuration files found.")
                 click.echo("Looking in: ., time_formats/, */")
                 return
-            
+
             choices = [str(f) for f in yaml_files]
             yaml_path = questionary.select(
                 "Select configuration file:",
                 choices=choices
             ).ask()
-            
+
             if not yaml_path:
                 click.echo("Cancelled.")
                 return
-        
+
         # Load config
         config = load_time_phrases(yaml_path)
         locale = config['locale']
-        
-        # Interactive prompt for mode
-        if not mode:
-            modes = list(config['modes'].keys())
-            
-            # Show mode descriptions
-            mode_descriptions = {
-                'operational': 'Military/radio precision (e.g., "thirteen hundred hours")',
-                'broadcast': 'News/announcements (e.g., "one thirty p.m.")',
-                'standard': 'Professional/office (e.g., "one thirty")',
-                'casual': 'Conversational (e.g., "half past one")',
-            }
-            
-            choices = [
-                questionary.Choice(
-                    title=f"{m} - {mode_descriptions.get(m, 'Custom mode')}",
-                    value=m
-                )
-                for m in modes
-            ]
-            
-            mode = questionary.select(
-                "Select mode:",
-                choices=choices
-            ).ask()
-            
-            if not mode:
-                click.echo("Cancelled.")
-                return
-        
-        if mode not in config['modes']:
-            click.echo(f"Error: Mode '{mode}' not found", err=True)
+        modes = list(config['modes'].keys())
+
+        if not modes:
+            click.echo("Error: no modes defined in YAML", err=True)
             return
-        
+
         # Interactive prompt for model
         if not model:
             model_files = find_model_files()
@@ -448,7 +548,7 @@ def generate_audio(yaml_path, mode, model, output_dir, force, speaker_threshold,
         if not model_path.exists():
             click.echo(f"Error: Model file not found: {model}", err=True)
             return
-        
+
         # Determine output directory
         model_filename = model_path.stem
         try:
@@ -456,21 +556,17 @@ def generate_audio(yaml_path, mode, model, output_dir, force, speaker_threshold,
             if len(parts) >= 3:
                 voice_name = parts[1]
                 quality = parts[2]
-                default_output_dir = f"audio/{locale}_{voice_name}_{quality}_{mode}"
+                default_output_dir = f"audio/{locale}_{voice_name}_{quality}"
             else:
-                voice_name = 'unknown'
-                quality = 'unknown'
-                default_output_dir = f"audio/{locale}_unknown_unknown_{mode}"
-        except:
-            voice_name = 'unknown'
-            quality = 'unknown'
-            default_output_dir = f"audio/{locale}_unknown_unknown_{mode}"
-        
+                default_output_dir = f"audio/{locale}_unknown_unknown"
+        except Exception:
+            default_output_dir = f"audio/{locale}_unknown_unknown"
+
         if output_dir is None:
             output_dir = default_output_dir
-        
+
         output_path = Path(output_dir)
-        
+
         # Check for existing files
         if output_path.exists() and not force:
             audio_dir = output_path / 'audio'
@@ -479,53 +575,50 @@ def generate_audio(yaml_path, mode, model, output_dir, force, speaker_threshold,
                 if not questionary.confirm("Overwrite existing files?").ask():
                     click.echo("Aborted.")
                     return
-        
+
         # Show configuration
-        click.echo(f"\nConfiguration: {locale}")
-        click.echo(f"Mode: {mode}")
+        click.echo(f"\nLocale: {locale}")
+        click.echo(f"Modes: {', '.join(modes)}")
         click.echo(f"Voice model: {model}")
         click.echo(f"Output directory: {output_dir}")
-        
+
         effective_threshold = None if speaker_threshold == 32767 else speaker_threshold
         effective_cutoff = None if highpass_cutoff == 0 else highpass_cutoff
-        
-        if effective_cutoff is not None:
-            click.echo(f"High-pass filter: {effective_cutoff}Hz")
-        else:
-            click.echo("High-pass filter: disabled")
-        
-        if effective_threshold is not None:
-            click.echo(f"Soft limiter: {effective_threshold}")
-        else:
-            click.echo("Soft limiter: disabled")
-        
+
+        click.echo(f"High-pass filter: {f'{effective_cutoff}Hz' if effective_cutoff else 'disabled'}")
+        click.echo(f"Soft limiter: {effective_threshold if effective_threshold else 'disabled'}")
+
         click.echo("\nGenerating audio files...")
-        
-        # Generate
+
         stats = generate_audio_package_with_tts(
-            config, mode, str(model_path), output_dir,
+            config, str(model_path), output_dir,
             speaker_threshold=effective_threshold,
             highpass_cutoff=effective_cutoff
         )
-        
+
+        click.echo("\nWriting rules files...")
+        rule_sizes = write_all_rules(config, output_dir)
+        for mode_name, size in rule_sizes.items():
+            click.echo(f"  {mode_name}_rules.json: {size} bytes")
+
         # Report results
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")
         click.echo("="*60)
-        click.echo(f"Vocab file: {stats['vocab_file']}")
+        click.echo(f"Vocab file:  {stats['vocab_file']}")
         click.echo(f"Audio files: {stats['audio_dir']}")
-        click.echo(f"Success: {stats['success_count']}/{stats['total_audio_files']}")
-        
+        click.echo(f"Rules:       {output_dir}/rules/")
+        click.echo(f"Success: {stats['success_count']}/{stats['total_audio_files']} audio files")
+
         if stats['failed_files']:
             click.echo(f"Failed: {stats['failure_count']}")
             for filename, text in stats['failed_files'][:3]:
                 click.echo(f"  {filename}: '{text}'")
             if len(stats['failed_files']) > 3:
                 click.echo(f"  ... and {len(stats['failed_files']) - 3} more")
-        
-        # Show command to repeat
+
         click.echo("\nTo repeat this operation:")
-        cmd = f"  tca generate --yaml {yaml_path} --mode {mode} --model {model}"
+        cmd = f"  tca generate --yaml {yaml_path} --model {model}"
         if output_dir != default_output_dir:
             cmd += f" --output-dir {output_dir}"
         if force:
@@ -535,7 +628,7 @@ def generate_audio(yaml_path, mode, model, output_dir, force, speaker_threshold,
         if highpass_cutoff != DEFAULT_HIGHPASS_CUTOFF:
             cmd += f" --highpass-cutoff {highpass_cutoff}"
         click.echo(cmd)
-        
+
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise click.Abort()
