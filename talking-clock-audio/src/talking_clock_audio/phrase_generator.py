@@ -327,6 +327,9 @@ def get_all_vocab_with_dedup(config: Dict[str, Any]) -> Tuple[Dict[str, str], Di
     Deduplicates vocab entries using case-insensitive comparison while
     preserving whitespace and punctuation as specified in the YAML.
     
+    Processes all sections in the vocab dictionary (words, number_words,
+    menu, toggle, interval, etc.) dynamically.
+    
     Args:
         config: Loaded YAML configuration.
         
@@ -339,43 +342,40 @@ def get_all_vocab_with_dedup(config: Dict[str, Any]) -> Tuple[Dict[str, str], Di
     vocab_to_file = {}
     audio_files = {}
     
-    for key, value in config['vocab']['words'].items():
-        if isinstance(value, list):
-            for i, variant in enumerate(value):
-                normalized = variant.lower()
+    # Process all vocab sections (words, number_words, menu, toggle, interval, etc.)
+    for section_name, section_content in config['vocab'].items():
+        # Determine prefix based on section name
+        if section_name == 'number_words':
+            prefix = 'number'
+        else:
+            prefix = 'word'
+        
+        for key, value in section_content.items():
+            if isinstance(value, list):
+                # Handle variants (only generate first variant)
+                for i, variant in enumerate(value):
+                    normalized = variant.lower()
+                    
+                    if normalized not in normalized_to_file:
+                        slug = slugify(variant)
+                        filename = f"{prefix}_{slug}.wav"
+                        normalized_to_file[normalized] = filename
+                        audio_files[filename] = variant
+                    
+                    vocab_key = f"{section_name}.{key}"
+                    vocab_to_file[vocab_key] = normalized_to_file[normalized]
+                    break  # Only process first variant
+            else:
+                normalized = value.lower()
                 
                 if normalized not in normalized_to_file:
-                    slug = slugify(variant)
-                    filename = f"word_{slug}.wav"
+                    slug = slugify(value)
+                    filename = f"{prefix}_{slug}.wav"
                     normalized_to_file[normalized] = filename
-                    audio_files[filename] = variant
+                    audio_files[filename] = value
                 
-                vocab_key = f"words.{key}"
+                vocab_key = f"{section_name}.{key}"
                 vocab_to_file[vocab_key] = normalized_to_file[normalized]
-                break
-        else:
-            normalized = value.lower()
-            
-            if normalized not in normalized_to_file:
-                slug = slugify(value)
-                filename = f"word_{slug}.wav"
-                normalized_to_file[normalized] = filename
-                audio_files[filename] = value
-            
-            vocab_key = f"words.{key}"
-            vocab_to_file[vocab_key] = normalized_to_file[normalized]
-    
-    for key, value in config['vocab']['number_words'].items():
-        normalized = value.lower()
-        
-        if normalized not in normalized_to_file:
-            slug = slugify(value)
-            filename = f"number_{slug}.wav"
-            normalized_to_file[normalized] = filename
-            audio_files[filename] = value
-        
-        vocab_key = f"number_words.{key}"
-        vocab_to_file[vocab_key] = normalized_to_file[normalized]
     
     return vocab_to_file, audio_files
 
