@@ -19,6 +19,22 @@ vocab:
     nachts: "'s nachts"
     middernacht: "middernacht"
     middag: "middag"
+  menu:
+    enter: "instellingen"
+    exit: "klaar"
+    set_time: "tijd instellen"
+    set_alarm: "wekker instellen"
+    alarm_enabled: "wekker inschakelen"
+    voice: "stem"
+    announce_interval: "aankondigingsinterval"
+  toggle:
+    on: "aan"
+    off: "uit"
+  interval:
+    hourly: "elk uur"
+    half: "elk half uur"
+    quarter: "elk kwartier"
+
 
   number_words:
     0: "nul"
@@ -92,6 +108,8 @@ fields:
     next_hour_12_word: "number_words[next_hour_12]"
     minute_to_next: "60 - minute"
     minute_to_next_word: "number_words[minute_to_next]"
+    minutes_from_half: "abs(minute - 30)"
+    minutes_from_half_word: "number_words[minutes_from_half]"
     day_period:
       when_hour_24_lt_6: "nachts"
       when_hour_24_lt_12: "ochtends"
@@ -101,11 +119,14 @@ fields:
 
 modes:
   operational:
-    rule_order: ["midnight", "on_the_hour", "minute_lt_10", "hour_minute"]
+    rule_order: ["midnight", "midday", "on_the_hour", "minute_lt_10", "hour_minute"]
     rules:
       midnight:
         when: {hour_24_eq: 0, minute_eq: 0}
         tokens: ["{nul}", "{uur}"]
+      midday:
+        when: {hour_24_eq: 12, minute_eq: 0}
+        tokens: ["{twaalf}", "{uur}"]
       on_the_hour:
         when: {minute_eq: 0}
         tokens: ["{hour_24_word}", "{uur}"]
@@ -156,6 +177,8 @@ modes:
       "half_hour",
       "kwart_over",
       "kwart_voor",
+      "voor_half",
+      "over_half",
       "minutes_over",
       "minutes_voor"
     ]
@@ -178,98 +201,122 @@ modes:
       kwart_voor:
         when: {minute_eq: 45}
         tokens: ["{kwart}", "{voor}", "{next_hour_12_word}"]
+      voor_half:
+        when: {minute_gt: 15, minute_lt: 30}
+        tokens: ["{minutes_from_half_word}", "{voor}", "{half}", "{next_hour_12_word}"]
+      over_half:
+        when: {minute_gt: 30, minute_lt: 45}
+        tokens: ["{minutes_from_half_word}", "{over}", "{half}", "{next_hour_12_word}"]
       minutes_over:
-        when: {minute_lt: 30, minute_gt: 0}
+        when: {minute_lt: 16, minute_gt: 0}
         tokens: ["{minute_word}", "{over}", "{hour_12_word}"]
       minutes_voor:
-        when: {minute_gt: 30}
+        when: {minute_gt: 44}
         tokens: ["{minute_to_next_word}", "{voor}", "{next_hour_12_word}"]
 
 rendered_examples:
   midnight:
-    00:00:
+    "00:00":
       operational: "nul uur"
       broadcast: "nul uur"
       standard: "twaalf uur 's nachts"
       casual: "middernacht"
 
   morning:
-    11:00:
+    "11:00":
       operational: "elf uur"
       broadcast: "elf uur"
       standard: "elf uur 's ochtends"
       casual: "elf uur"
-    
-    11:01:
+
+    "11:01":
       operational: "elf nul een"
       broadcast: "elf uur een"
       standard: "elf uur een 's ochtends"
       casual: "een over elf"
-    
-    11:07:
+
+    "11:07":
       operational: "elf nul zeven"
       broadcast: "elf uur zeven"
       standard: "elf uur zeven 's ochtends"
       casual: "zeven over elf"
-    
-    11:15:
+
+    "11:15":
       operational: "elf vijftien"
       broadcast: "elf uur vijftien"
       standard: "elf uur vijftien 's ochtends"
       casual: "kwart over elf"
-    
-    11:30:
+
+    "11:20":
+      operational: "elf twintig"
+      broadcast: "elf uur twintig"
+      standard: "elf uur twintig 's ochtends"
+      casual: "tien voor half twaalf"
+
+    "11:30":
       operational: "elf dertig"
       broadcast: "elf uur dertig"
       standard: "elf uur dertig 's ochtends"
       casual: "half twaalf"
-    
-    11:45:
+
+    "11:35":
+      operational: "elf vijfendertig"
+      broadcast: "elf uur vijfendertig"
+      standard: "elf uur vijfendertig 's ochtends"
+      casual: "vijf over half twaalf"
+
+    "11:40":
+      operational: "elf veertig"
+      broadcast: "elf uur veertig"
+      standard: "elf uur veertig 's ochtends"
+      casual: "tien over half twaalf"
+
+    "11:45":
       operational: "elf vijfenveertig"
       broadcast: "elf uur vijfenveertig"
       standard: "elf uur vijfenveertig 's ochtends"
       casual: "kwart voor twaalf"
-    
-    11:53:
+
+    "11:53":
       operational: "elf drieënvijftig"
       broadcast: "elf uur drieënvijftig"
       standard: "elf uur drieënvijftig 's ochtends"
       casual: "zeven voor twaalf"
 
   noon:
-    12:00:
+    "12:00":
       operational: "twaalf uur"
       broadcast: "twaalf uur"
       standard: "twaalf uur 's middags"
       casual: "middag"
-    
-    12:30:
+
+    "12:30":
       operational: "twaalf dertig"
       broadcast: "twaalf uur dertig"
       standard: "twaalf uur dertig 's middags"
       casual: "half een"
 
   afternoon:
-    13:00:
+    "13:00":
       operational: "dertien uur"
       broadcast: "dertien uur"
       standard: "een uur 's middags"
       casual: "een uur"
-    
-    13:30:
+
+    "13:30":
       operational: "dertien dertig"
       broadcast: "dertien uur dertig"
       standard: "een uur dertig 's middags"
       casual: "half twee"
 
   evening:
-    23:00:
+    "23:00":
       operational: "drieëntwintig uur"
       broadcast: "drieëntwintig uur"
       standard: "elf uur 's avonds"
       casual: "elf uur"
-    
-    23:07:
+
+    "23:07":
       operational: "drieëntwintig nul zeven"
       broadcast: "drieëntwintig uur zeven"
       standard: "elf uur zeven 's avonds"

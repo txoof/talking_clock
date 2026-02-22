@@ -24,7 +24,7 @@ vocab:
     exit: "done"
     set_time: "set time"
     set_alarm: "set alarm"
-    alarm_enabled: "alarm"
+    alarm_enabled: "enable alarm"
     voice: "voice"
     announce_interval: "announcement interval"
   toggle:
