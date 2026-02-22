@@ -19,6 +19,21 @@ vocab:
     hours: "hours"
     midnight: "midnight"
     noon: "noon"
+  menu:
+    enter: "settings"
+    exit: "done"
+    set_time: "set time"
+    set_alarm: "set alarm"
+    alarm_enabled: "alarm"
+    voice: "voice"
+    announce_interval: "announcement interval"
+  toggle:
+    on: "on"
+    off: "off"
+  interval:
+    hourly: "every hour"
+    half: "every half hour"
+    quarter: "every quarter hour"
 
   number_words:
     0: "zero"
