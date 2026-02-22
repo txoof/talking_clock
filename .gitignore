@@ -6,6 +6,7 @@ cpfiles.bak
 # vscode
 **/.vscode/*
 
+**/tests/sd_mock/*
 
 # voice models
 *.onnx.json
