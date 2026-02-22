@@ -1,0 +1,1 @@
+{"locale":"en_US","day_period":[[12,"am"],[null,"pm"]],"modes":{"operational":[{"when":{"minute_eq":0},"tokens":["number_words.{h24}","words.hundred","words.hours"]},{"when":{"minute_lt":10,"minute_gt":0},"tokens":["number_words.{h24}","words.zero","number_words.{m}","words.hours"]},{"when":{"any":true},"tokens":["number_words.{h24}","number_words.{m}","words.hours"]}]}}
