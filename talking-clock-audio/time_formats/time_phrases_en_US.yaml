@@ -27,6 +27,7 @@ vocab:
     alarm_enabled: "enable alarm"
     voice: "voice"
     announce_interval: "announcement interval"
+    mode: "time format"
   toggle:
     on: "on"
     off: "off"
@@ -34,6 +35,13 @@ vocab:
     hourly: "every hour"
     half: "every half hour"
     quarter: "every quarter hour"
+  voice:
+    name: "U.S. English"
+  mode:
+    operational: "operational"
+    broadcast: "broadcast"
+    standard: "standard"
+    casual: "casual"
 
   number_words:
     0: "zero"

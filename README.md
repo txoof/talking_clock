@@ -7,20 +7,23 @@ Accessible clock that announces the time
 ## Bugs
 
 - [ ] Long-press of the announcement button does not appear to exit the menu
+- [ ] Long-press of any button does not appear to exit the menu
 
 ## Firmware / Features
 
 - [ ] Need to make sure time announcement works as expected
 - [ ] Need to build out alarm
-- [ ] Print menu levels to serial terminal for debugging
+- [x] Print menu levels to serial terminal for debugging
 - [ ] Implement new rules on clock to use updated voice model vocabulary and rules
 
 ## UX / Audio
 
 - [ ] When setting the alarm, AM and PM (or equivalent) must be used in all cases
+- [x] When entering settings mode, it appears to advance two menu places
 - [ ] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
 - [ ] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
 - [ ] Need sound effects for alarm
+- [ ] Nederlanse stem is heel langzam "...elf....over.....negen"
 
 ## Audio Package
 

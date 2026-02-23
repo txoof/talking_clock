@@ -27,6 +27,7 @@ vocab:
     alarm_enabled: "wekker inschakelen"
     voice: "stem"
     announce_interval: "aankondigingsinterval"
+    mode: "tijdformaat"
   toggle:
     on: "aan"
     off: "uit"
@@ -34,7 +35,15 @@ vocab:
     hourly: "elk uur"
     half: "elk half uur"
     quarter: "elk kwartier"
-
+  voice:
+    name: "N.L. Nederlands"
+  mode:
+    vocab:
+  mode:
+    operational: "operationeel"
+    broadcast: "uitzending"
+    standard: "standaard"
+    casual: "informeel"
 
   number_words:
     0: "nul"

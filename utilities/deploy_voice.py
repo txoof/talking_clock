@@ -7,7 +7,7 @@ Usage:
     python deploy_voice.py <source_path>
 
 Example:
-    python deploy_voice.py ./talking-clock-audio/audio/en_US_lessac_medium_standard/
+    python deploy_voice.py ./talking-clock-audio/audio/en_US_lessac_medium/
 """
 
 import sys
