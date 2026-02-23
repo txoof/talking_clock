@@ -9,13 +9,11 @@
 # Button constants match code.py:
 #   ANNOUNCE = 0, PLUS = 1, MINUS = 2
 #
-# Events passed to handle_event() are plain dicts:
-#   { "key": 0|1|2, "type": "short"|"long" }
-#
 # Callers must supply two callables at construction:
-#   play_token(token)   - plays a single audio token, returns when done
-#   on_action(action)   - called when an action item is confirmed
-#                         e.g. on_action("set_time"), on_action("set_alarm")
+#   play_token(token)         - plays a token through the active voice
+#   play_token_for_voice(voice_entry, token)
+#                             - plays a token through a specific voice entry
+#   on_action(action)         - called when an action item is confirmed
 
 import time
 
@@ -23,33 +21,37 @@ ANNOUNCE = 0
 PLUS     = 1
 MINUS    = 2
 
-STATE_IDLE  = "idle"
-STATE_MENU  = "menu"
+STATE_IDLE = "idle"
+STATE_MENU = "menu"
 
 INACTIVITY_TIMEOUT = 30.0
 
 
 class Menu:
-    def __init__(self, items, config, save_config, play_token, on_action):
+    def __init__(self, items, config, save_config, play_token, on_action,
+                 play_token_for_voice=None, voices=None):
         """Initialise the menu.
 
         Args:
-            items:       list of item dicts from menu.json, with voice options
-                         already populated for the "voice" toggle.
-            config:      the live config dict (mutated directly on toggle).
-            save_config: callable(config) - persists config to SD.
-            play_token:  callable(token: str) - plays audio token, blocking.
-            on_action:   callable(action: str) - fires when an action is confirmed.
+            items:                list of item dicts from menu.json.
+            config:               the live config dict (mutated directly on toggle).
+            save_config:          callable(config) - persists config to SD.
+            play_token:           callable(token) - plays token in active voice.
+            on_action:            callable(action) - fires when action confirmed.
+            play_token_for_voice: callable(voice_entry, token) - for voice toggle.
+            voices:               the full voices dict from scan_voices().
         """
-        self._items      = items
-        self._config     = config
-        self._save       = save_config
-        self._play       = play_token
-        self._on_action  = on_action
+        self._items                = items
+        self._config               = config
+        self._save                 = save_config
+        self._play                 = play_token
+        self._play_for_voice       = play_token_for_voice
+        self._voices               = voices or {}
+        self._on_action            = on_action
 
         self._state      = STATE_IDLE
         self._index      = 0
-        self._last_event = None  # monotonic time of last interaction in menu
+        self._last_event = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -61,27 +63,32 @@ class Menu:
         return self._state == STATE_MENU
 
     def enter(self):
-        """Open the menu. Call when long-press PLUS/MINUS detected in normal mode."""
+        """Open the menu."""
         self._state      = STATE_MENU
         self._index      = 0
         self._last_event = time.monotonic()
+        print("Menu: entered")
         self._play("menu.enter")
         self._speak_current()
 
     def handle_event(self, key, press_type):
         """Process a button event while menu is active.
 
-        Args:
-            key:        ANNOUNCE, PLUS, or MINUS
-            press_type: "short" or "long"
+        Any long press exits the menu.
+        Short PLUS/MINUS scrolls. Short ANNOUNCE confirms.
 
         Returns:
-            True if the event was consumed by the menu, False otherwise.
+            True if the event was consumed by the menu.
         """
         if self._state != STATE_MENU:
             return False
 
         self._last_event = time.monotonic()
+
+        if press_type == "long":
+            print(f"Menu: long-press exit (key={key})")
+            self._exit()
+            return True
 
         if key == PLUS and press_type == "short":
             self._scroll(1)
@@ -92,11 +99,8 @@ class Menu:
             return True
 
         if key == ANNOUNCE and press_type == "short":
+            print(f"Menu: confirm on '{self._items[self._index]['id']}'")
             self._confirm()
-            return True
-
-        if key == ANNOUNCE and press_type == "long":
-            self._exit()
             return True
 
         return True  # consume all events while menu is open
@@ -106,7 +110,7 @@ class Menu:
         if self._state != STATE_MENU:
             return
         if (time.monotonic() - self._last_event) >= INACTIVITY_TIMEOUT:
-            print("Menu: inactivity timeout")
+            print("Menu: inactivity timeout, exiting")
             self._exit()
 
     # ------------------------------------------------------------------
@@ -115,6 +119,8 @@ class Menu:
 
     def _scroll(self, direction):
         self._index = (self._index + direction) % len(self._items)
+        item = self._items[self._index]
+        print(f"Menu: scroll to [{self._index}] '{item['id']}'")
         self._speak_current()
 
     def _speak_current(self):
@@ -125,7 +131,7 @@ class Menu:
         item = self._items[self._index]
 
         if item["type"] == "action":
-            self._exit()
+            self._exit(silent=True)
             self._on_action(item["action"])
 
         elif item["type"] == "toggle":
@@ -140,7 +146,6 @@ class Menu:
         config_key = item["config_key"]
         current    = self._config.get(config_key)
 
-        # Find current index in options, default to 0 if not found
         current_idx = 0
         for i, opt in enumerate(options):
             if opt["value"] == current:
@@ -153,17 +158,25 @@ class Menu:
 
         self._config[config_key] = next_value
         self._save(self._config)
-        print(f"Menu: {config_key} = {next_value}")
+        print(f"Menu: {config_key} {current!r} -> {next_value!r}")
 
-        # For voice toggle, caller is responsible for reloading vocab.
-        # We signal this by firing on_action("reload_voice") after saving.
         if item["id"] == "voice":
-            self._play(next_opt["audio_token"])
+            # Announce the new voice name in that voice's own language
+            target_entry = self._voices.get(next_value)
+            if target_entry and self._play_for_voice:
+                self._play_for_voice(target_entry, "voice.name")
+            else:
+                self._play(next_opt["audio_token"])
             self._on_action("reload_voice")
+
+        elif item["id"] == "mode":
+            self._on_action("reload_mode")
+
         else:
             self._play(next_opt["audio_token"])
 
-    def _exit(self):
+    def _exit(self, silent=False):
         self._state = STATE_IDLE
-        self._play("menu.exit")
+        if not silent:
+            self._play("menu.exit")
         print("Menu: exited")

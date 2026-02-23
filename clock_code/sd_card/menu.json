@@ -35,6 +35,13 @@
       ]
     },
     {
+      "id": "mode",
+      "audio_token": "menu.mode",
+      "type": "toggle",
+      "config_key": "mode",
+      "options": []
+    },
+    {
       "id": "voice",
       "audio_token": "menu.voice",
       "type": "toggle",

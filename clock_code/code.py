@@ -16,8 +16,11 @@ import os
 
 import adafruit_ds3231
 
-from voices import scan_voices, resolve_token
+from voices import scan_voices, resolve_token, load_rules
 from menu import Menu
+import pico_rules
+
+VERSION = "0.2.0"
 
 # --- Hardware init ---
 
@@ -59,7 +62,8 @@ ALARM_MAX_SECS = 300  # 5 minutes
 
 DEFAULT_CONFIG = {
     "volume_step":       7,
-    "voice":             "en_US_lessac_medium_standard",
+    "voice":             "en_US_lessac_medium",
+    "mode":              "standard",
     "alarm_enabled":     False,
     "alarm_hour":        7,
     "alarm_minute":      0,
@@ -70,7 +74,6 @@ def load_config():
     try:
         with open(CONFIG_PATH, "r") as f:
             data = json.load(f)
-        # Fill in any keys missing from older config files
         for k, v in DEFAULT_CONFIG.items():
             if k not in data:
                 data[k] = v
@@ -87,9 +90,9 @@ def save_config(cfg):
         print("Config save failed:", e)
 
 config = load_config()
-save_config(config)  # write defaults if file was missing or incomplete
+save_config(config)
 
-# --- Voice / vocab ---
+# --- Voice / vocab / rules ---
 
 voices = scan_voices()
 
@@ -102,7 +105,18 @@ def load_voice(name):
 active_voice_name, active_voice = load_voice(config["voice"])
 print(f"Voice: {active_voice_name}")
 
-volume_step       = config.get("volume_step", 7)
+def reload_rules():
+    global active_rules
+    active_rules = load_rules(active_voice, config["mode"])
+    if active_rules:
+        print(f"Rules loaded: {config['mode']}")
+    else:
+        print(f"Rules load failed for mode: {config['mode']}")
+
+active_rules = None
+reload_rules()
+
+volume_step        = config.get("volume_step", 7)
 mixer.voice[0].level = volume_step / VOLUME_STEPS
 volume_dirty_since = None
 
@@ -127,6 +141,11 @@ def play_token(token):
     path = resolve_token(active_voice, token)
     play_path(path)
 
+def play_token_for_voice(voice_entry, token):
+    """Resolve and play a token through a specific voice, not the active one."""
+    path = resolve_token(voice_entry, token)
+    play_path(path)
+
 def play_boop():
     play_path(BOOP_PATH)
 
@@ -135,25 +154,21 @@ def discard_events():
         pass
 
 def play_sequence(hour_24, minute):
-    """Play a time announcement, interruptible by PLUS or MINUS."""
-    h12   = ((hour_24 + 11) % 12) + 1
+    """Play a time announcement using active rules, interruptible by PLUS or MINUS."""
     vocab = active_voice["vocab"]
 
-    def w(key):
-        return resolve_token(active_voice, key)
-
-    if hour_24 == 0 and minute == 0:
-        files = [w("words.midnight")]
-    elif hour_24 == 12 and minute == 0:
-        files = [w("words.noon")]
-    elif minute == 0:
-        files = [w(f"number_words.{h12}"), w("words.oclock")]
-    elif 0 < minute < 10:
-        files = [w(f"number_words.{h12}"), w("words.oh"), w(f"number_words.{minute}")]
+    if active_rules:
+        files = pico_rules.get_audio_files(active_rules, vocab, config["mode"], hour_24, minute)
+        if files:
+            files = [f"{active_voice['path']}/audio/{f}" for f in files]
+        else:
+            print(f"No rule match for {hour_24:02d}:{minute:02d} in mode {config['mode']}")
+            return
     else:
-        files = [w(f"number_words.{h12}"), w(f"number_words.{minute}")]
+        print("No rules loaded, cannot announce")
+        return
 
-    print(f"{hour_24:02d}:{minute:02d} -> {files}")
+    print(f"{hour_24:02d}:{minute:02d} [{config['mode']}] -> {files}")
 
     handles = []
     wavs    = []
@@ -182,18 +197,19 @@ def load_menu_items():
         data = json.load(f)
     items = data["items"]
 
-    # Populate voice toggle options from scan results at runtime
     for item in items:
         if item["id"] == "voice":
+            # Each voice announces itself in its own language
             item["options"] = [
-                {
-                    "value":       name,
-                    "audio_token": f"voice.{name}",
-                }
+                {"value": name, "audio_token": "voice.name", "voice": name}
                 for name in voices.keys()
             ]
-            # Voice names have no dedicated audio token - fall back to boop.
-            # Users hear the confirmation spoken in the new voice after switch.
+        elif item["id"] == "mode":
+            # Modes from the active voice's rules directory
+            item["options"] = [
+                {"value": m, "audio_token": f"mode.{m}"}
+                for m in active_voice.get("modes", [])
+            ]
     return items
 
 def on_action(action):
@@ -204,6 +220,7 @@ def on_action(action):
         set_hour   = h
         set_minute = m
         mode       = "set_hour"
+        last_interaction = time.monotonic()
         play_token("menu.set_time")
         play_sequence_hour(set_hour)
 
@@ -211,6 +228,7 @@ def on_action(action):
         set_hour   = config["alarm_hour"]
         set_minute = config["alarm_minute"]
         mode       = "set_alarm_hour"
+        last_interaction = time.monotonic()
         play_token("menu.set_alarm")
         play_sequence_hour(set_hour)
 
@@ -218,15 +236,25 @@ def on_action(action):
         name = config["voice"]
         active_voice_name, active_voice = load_voice(name)
         print(f"Voice reloaded: {active_voice_name}")
-        # Confirm in new voice
+        reload_rules()
+        # Confirm in the new voice
         play_token("menu.enter")
 
+    elif action == "reload_mode":
+        reload_rules()
+        # Play the mode name then a sample of the current time
+        play_token(f"mode.{config['mode']}")
+        h, m = now()
+        play_sequence(h, m)
+
 menu = Menu(
-    items       = load_menu_items(),
-    config      = config,
-    save_config = save_config,
-    play_token  = play_token,
-    on_action   = on_action,
+    items                = load_menu_items(),
+    config               = config,
+    save_config          = save_config,
+    play_token           = play_token,
+    on_action            = on_action,
+    play_token_for_voice = play_token_for_voice,
+    voices               = voices,
 )
 
 # --- Time setting helpers ---
@@ -240,8 +268,8 @@ def play_sequence_minute(m):
 
 # --- Alarm ---
 
-alarm_ringing   = False
-alarm_start     = None
+alarm_ringing = False
+alarm_start   = None
 
 def check_alarm():
     global alarm_ringing, alarm_start
@@ -279,9 +307,9 @@ def check_auto_announce():
     interval = config.get("announce_interval", "off")
     if interval == "off":
         return
-    t  = rtc.datetime
-    h  = t.tm_hour
-    m  = t.tm_min
+    t = rtc.datetime
+    h = t.tm_hour
+    m = t.tm_min
     if m == last_announced_minute:
         return
     announce = False
@@ -297,16 +325,23 @@ def check_auto_announce():
 
 # --- State ---
 
-mode       = "normal"
-set_hour   = 0
-set_minute = 0
-held       = {PLUS: None, MINUS: None, ANNOUNCE: None}
+mode             = "normal"
+set_hour         = 0
+set_minute       = 0
+held             = {PLUS: None, MINUS: None, ANNOUNCE: None}
+last_interaction = None
+VALUE_ENTRY_TIMEOUT = 30.0
 
 def now():
     t = rtc.datetime
     return t.tm_hour, t.tm_min
 
-print("Ready.")
+def print_status():
+    print(f"Version: {VERSION}")
+    print(f"Config: {config}")
+    print(f"Voice: {active_voice_name}  Mode: {config['mode']}")
+
+print_status()
 h, m = now()
 print(f"RTC time: {h:02d}:{m:02d}")
 
@@ -319,7 +354,6 @@ while True:
     if event:
         key = event.key_number
 
-        # Track all button hold times
         if event.pressed:
             held[key] = now_t
         elif event.released:
@@ -335,6 +369,7 @@ while True:
             if event.released:
                 duration = (now_t - held.get(key, now_t)) if held.get(key) else 0
                 press_type = "long" if duration >= HOLD_SECONDS else "short"
+                print(f"Menu: key={key} duration={duration:.2f}s type={press_type}")
                 menu.handle_event(key, press_type)
             continue
 
@@ -360,6 +395,7 @@ while True:
         # --- Set time: hour ---
         elif mode == "set_hour":
             if event.pressed:
+                last_interaction = now_t
                 if key == PLUS:
                     set_hour = (set_hour + 1) % 24
                     play_sequence_hour(set_hour)
@@ -373,6 +409,7 @@ while True:
         # --- Set time: minute ---
         elif mode == "set_minute":
             if event.pressed:
+                last_interaction = now_t
                 if key == PLUS:
                     set_minute = (set_minute + 1) % 60
                     play_sequence_minute(set_minute)
@@ -392,6 +429,7 @@ while True:
         # --- Set alarm: hour ---
         elif mode == "set_alarm_hour":
             if event.pressed:
+                last_interaction = now_t
                 if key == PLUS:
                     set_hour = (set_hour + 1) % 24
                     play_sequence_hour(set_hour)
@@ -405,6 +443,7 @@ while True:
         # --- Set alarm: minute ---
         elif mode == "set_alarm_minute":
             if event.pressed:
+                last_interaction = now_t
                 if key == PLUS:
                     set_minute = (set_minute + 1) % 60
                     play_sequence_minute(set_minute)
@@ -422,9 +461,21 @@ while True:
     if mode == "normal" and not menu.active:
         for key in (PLUS, MINUS):
             if held[key] is not None and (now_t - held[key]) >= HOLD_SECONDS:
+                duration = now_t - held[key]
+                print(f"Menu: long-press detected key={key} duration={duration:.2f}s")
+                print_status()
                 held[key] = None
                 menu.enter()
+                discard_events()
                 break
+
+    # --- Value-entry inactivity timeout ---
+    if mode in ("set_hour", "set_minute", "set_alarm_hour", "set_alarm_minute"):
+        if last_interaction is not None and (now_t - last_interaction) >= VALUE_ENTRY_TIMEOUT:
+            print(f"Value entry: inactivity timeout in mode '{mode}'")
+            mode = "normal"
+            last_interaction = None
+            play_token("menu.exit")
 
     # --- Menu inactivity timeout ---
     menu.tick()
