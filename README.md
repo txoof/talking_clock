@@ -20,14 +20,14 @@ Accessible clock that announces the time
 
 - [ ] When setting the alarm, AM and PM (or equivalent) must be used in all cases
 - [x] When entering settings mode, it appears to advance two menu places
-- [ ] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
-- [ ] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
+- [x] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
+- [x] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
 - [ ] Need sound effects for alarm
-- [ ] Nederlanse stem is heel langzam "...elf....over.....negen"
+- [ ] Nederlandse stem is erg traag "...elf....over.....negen"
 
 ## Audio Package
 
-- [ ] Add a vocabulary item for the name of the current voice
+- [x] Add a vocabulary item for the name of the current voice
 - [x] Build out better rules for operational, broadcast, etc.
 - [x] Build test cases for rules
 - [x] Update tca to generate one directory per voice model with rule files and all samples
