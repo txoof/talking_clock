@@ -4,7 +4,7 @@ cpfiles.bak
 **/stubArchive
 
 # vscode
-.vscode/
+**/.vscode/
 
 **/tests/sd_mock/*
 
