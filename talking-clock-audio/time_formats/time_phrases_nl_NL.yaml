@@ -25,6 +25,7 @@ vocab:
     set_time: "tijd instellen"
     set_alarm: "wekker instellen"
     alarm_enabled: "wekker inschakelen"
+    alarm_tone: "wekkergeluid"
     voice: "stem"
     announce_interval: "aankondigingsinterval"
     mode: "tijdformaat"
@@ -37,8 +38,6 @@ vocab:
     quarter: "elk kwartier"
   voice:
     name: "N.L. Nederlands"
-  mode:
-    vocab:
   mode:
     operational: "operationeel"
     broadcast: "uitzending"

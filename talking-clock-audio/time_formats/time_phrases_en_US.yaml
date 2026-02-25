@@ -6,8 +6,8 @@ description: >
 
 vocab:
   words:
-    am: "a.m."
-    pm: "p.m."
+    am: "a m"
+    pm: "p m"
     oclock: "o'clock"
     past: "past"
     to: "to"
@@ -25,6 +25,7 @@ vocab:
     set_time: "set time"
     set_alarm: "set alarm"
     alarm_enabled: "enable alarm"
+    alarm_tone: "alarm tone"
     voice: "voice"
     announce_interval: "announcement interval"
     mode: "time format"
