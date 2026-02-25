@@ -213,7 +213,7 @@ def load_menu_items():
     return items
 
 def on_action(action):
-    global mode, set_hour, set_minute, active_voice_name, active_voice
+    global mode, set_hour, set_minute, active_voice_name, active_voice, last_interaction
 
     if action == "set_time":
         h, m = now()
@@ -356,18 +356,18 @@ while True:
 
         if event.pressed:
             held[key] = now_t
-        elif event.released:
-            held[key] = None
 
         # --- Alarm silencing takes priority ---
         if alarm_ringing and event.pressed and key == ANNOUNCE:
+            held[key] = None
             silence_alarm()
             continue
 
         # --- Menu active: forward all events ---
         if menu.active:
             if event.released:
-                duration = (now_t - held.get(key, now_t)) if held.get(key) else 0
+                duration = (now_t - held[key]) if held[key] is not None else 0
+                held[key] = None
                 press_type = "long" if duration >= HOLD_SECONDS else "short"
                 print(f"Menu: key={key} duration={duration:.2f}s type={press_type}")
                 menu.handle_event(key, press_type)
@@ -377,7 +377,9 @@ while True:
         if mode == "normal":
             if key in (PLUS, MINUS):
                 if event.released:
-                    duration = now_t - (held.get(key) or now_t)
+                    press_time = held.get(key)
+                    held[key] = None
+                    duration = (now_t - press_time) if press_time is not None else 0
                     if duration < HOLD_SECONDS:
                         if key == PLUS:
                             volume_step = min(VOLUME_STEPS, volume_step + 1)
@@ -391,6 +393,9 @@ while True:
             if event.pressed and key == ANNOUNCE:
                 h, m = now()
                 play_sequence(h, m)
+
+            if event.released and key == ANNOUNCE:
+                held[key] = None
 
         # --- Set time: hour ---
         elif mode == "set_hour":
@@ -464,7 +469,9 @@ while True:
                 duration = now_t - held[key]
                 print(f"Menu: long-press detected key={key} duration={duration:.2f}s")
                 print_status()
-                held[key] = None
+                held[PLUS] = None
+                held[MINUS] = None
+                held[ANNOUNCE] = None
                 menu.enter()
                 discard_events()
                 break
