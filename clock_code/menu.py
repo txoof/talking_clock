@@ -29,7 +29,7 @@ INACTIVITY_TIMEOUT = 30.0
 
 class Menu:
     def __init__(self, items, config, save_config, play_token, on_action,
-                 play_token_for_voice=None, voices=None):
+                 play_token_for_voice=None, voices=None, play_path=None):
         """Initialise the menu.
 
         Args:
@@ -40,12 +40,14 @@ class Menu:
             on_action:            callable(action) - fires when action confirmed.
             play_token_for_voice: callable(voice_entry, token) - for voice toggle.
             voices:               the full voices dict from scan_voices().
+            play_path:            callable(path) - plays a raw file path directly.
         """
         self._items                = items
         self._config               = config
         self._save                 = save_config
         self._play                 = play_token
         self._play_for_voice       = play_token_for_voice
+        self._play_path            = play_path
         self._voices               = voices or {}
         self._on_action            = on_action
 
@@ -161,7 +163,6 @@ class Menu:
         print(f"Menu: {config_key} {current!r} -> {next_value!r}")
 
         if item["id"] == "voice":
-            # Announce the new voice name in that voice's own language
             target_entry = self._voices.get(next_value)
             if target_entry and self._play_for_voice:
                 self._play_for_voice(target_entry, "voice.name")
@@ -171,6 +172,15 @@ class Menu:
 
         elif item["id"] == "mode":
             self._on_action("reload_mode")
+
+        elif item["id"] == "alarm_tone":
+            # Play index number then tone 3 times as preview
+            index = next_opt.get("index", 0)
+            self._play(f"number_words.{index}")
+            tone_path = next_opt.get("path")
+            if tone_path and self._play_path:
+                for _ in range(3):
+                    self._play_path(tone_path)
 
         else:
             self._play(next_opt["audio_token"])

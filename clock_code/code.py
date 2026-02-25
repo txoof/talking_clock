@@ -16,11 +16,11 @@ import os
 
 import adafruit_ds3231
 
-from voices import scan_voices, resolve_token, load_rules
+from voices import scan_voices, resolve_token, load_rules, scan_alarm_tones
 from menu import Menu
 import pico_rules
 
-VERSION = "0.2.0"
+VERSION = "0.3.3"
 
 # --- Hardware init ---
 
@@ -54,10 +54,11 @@ audio.play(mixer)
 # --- Config ---
 
 CONFIG_PATH    = "/sd/config.json"
-MENU_PATH      = "/sd/menu.json"
+MENU_PATH      = "/menu.json"
 VOLUME_STEPS   = 10
 VOLUME_DELAY   = 5.5
 HOLD_SECONDS   = 1.5
+VALUE_REPEAT_INTERVAL = 0.150  # seconds between increments when held
 ALARM_MAX_SECS = 300  # 5 minutes
 
 DEFAULT_CONFIG = {
@@ -67,6 +68,7 @@ DEFAULT_CONFIG = {
     "alarm_enabled":     False,
     "alarm_hour":        7,
     "alarm_minute":      0,
+    "alarm_tone":        "/sd/audio_assets/volume_boop.wav",
     "announce_interval": "off",
 }
 
@@ -95,6 +97,8 @@ save_config(config)
 # --- Voice / vocab / rules ---
 
 voices = scan_voices()
+alarm_tones = scan_alarm_tones()
+print(f"Alarm tones: {[t['filename'] for t in alarm_tones]}")
 
 def load_voice(name):
     if name not in voices:
@@ -123,6 +127,7 @@ volume_dirty_since = None
 # --- Audio ---
 
 BOOP_PATH = "/sd/audio_assets/volume_boop.wav"
+BEEP_PATH = "/sd/audio_assets/beep.wav"
 
 def play_path(path):
     try:
@@ -199,38 +204,49 @@ def load_menu_items():
 
     for item in items:
         if item["id"] == "voice":
-            # Each voice announces itself in its own language
             item["options"] = [
                 {"value": name, "audio_token": "voice.name", "voice": name}
                 for name in voices.keys()
             ]
         elif item["id"] == "mode":
-            # Modes from the active voice's rules directory
             item["options"] = [
                 {"value": m, "audio_token": f"mode.{m}"}
                 for m in active_voice.get("modes", [])
             ]
+        elif item["id"] == "alarm_tone":
+            # Options populated from scanned tones at runtime.
+            # audio_token is None - menu will play index + tone preview instead.
+            item["options"] = [
+                {"value": t["path"], "audio_token": None, "index": t["index"], "path": t["path"]}
+                for t in alarm_tones
+            ]
     return items
 
 def on_action(action):
-    global mode, set_hour, set_minute, active_voice_name, active_voice, last_interaction
+    global mode, set_hour, set_minute, active_voice_name, active_voice, last_interaction, value_repeat_key, value_repeat_next, value_did_repeat
 
     if action == "set_time":
         h, m = now()
-        set_hour   = h
-        set_minute = m
-        mode       = "set_hour"
-        last_interaction = time.monotonic()
+        set_hour          = h
+        set_minute        = m
+        mode              = "set_hour"
+        last_interaction  = time.monotonic()
+        value_repeat_key  = None
+        value_repeat_next = None
+        value_did_repeat  = False
         play_token("menu.set_time")
         play_sequence_hour(set_hour)
 
     elif action == "set_alarm":
-        set_hour   = config["alarm_hour"]
-        set_minute = config["alarm_minute"]
-        mode       = "set_alarm_hour"
-        last_interaction = time.monotonic()
+        set_hour          = config["alarm_hour"]
+        set_minute        = config["alarm_minute"]
+        mode              = "set_alarm_hour"
+        last_interaction  = time.monotonic()
+        value_repeat_key  = None
+        value_repeat_next = None
+        value_did_repeat  = False
         play_token("menu.set_alarm")
-        play_sequence_hour(set_hour)
+        play_sequence_hour_alarm(set_hour)
 
     elif action == "reload_voice":
         name = config["voice"]
@@ -255,6 +271,7 @@ menu = Menu(
     on_action            = on_action,
     play_token_for_voice = play_token_for_voice,
     voices               = voices,
+    play_path            = play_path,
 )
 
 # --- Time setting helpers ---
@@ -262,39 +279,67 @@ menu = Menu(
 def play_sequence_hour(h):
     play_sequence(h, 0)
 
+def play_sequence_hour_alarm(h):
+    # Play hour for alarm setting - always appends day period word for clarity.
+    play_sequence(h, 0)
+    if active_rules:
+        day_period_table = active_rules.get("day_period", [])
+        period = pico_rules._resolve_period(day_period_table, h)
+        if period:
+            path = resolve_token(active_voice, f"words.{period}")
+            play_path(path)
+
 def play_sequence_minute(m):
     path = resolve_token(active_voice, f"number_words.{m}")
     play_path(path)
 
 # --- Alarm ---
 
-alarm_ringing = False
-alarm_start   = None
+ALARM_TONE_REPEATS = 3
+ALARM_CYCLE_PAUSE  = 3.0  # seconds between cycles
+
+alarm_ringing    = False
+alarm_start      = None
+alarm_next_cycle = None  # monotonic time when next cycle should start
+
+def _alarm_tone_path():
+    return config.get("alarm_tone", "/sd/audio_assets/volume_boop.wav")
 
 def check_alarm():
-    global alarm_ringing, alarm_start
+    global alarm_ringing, alarm_start, alarm_next_cycle
     if not config.get("alarm_enabled"):
         return
     t = rtc.datetime
     if t.tm_hour == config["alarm_hour"] and t.tm_min == config["alarm_minute"] and t.tm_sec < 2:
         if not alarm_ringing:
-            alarm_ringing = True
-            alarm_start   = time.monotonic()
+            alarm_ringing    = True
+            alarm_start      = time.monotonic()
+            alarm_next_cycle = alarm_start
             print("Alarm triggered")
 
 def tick_alarm():
-    global alarm_ringing, alarm_start
+    global alarm_ringing, alarm_next_cycle
     if not alarm_ringing:
         return
-    if (time.monotonic() - alarm_start) >= ALARM_MAX_SECS:
+    now_t = time.monotonic()
+    if (now_t - alarm_start) >= ALARM_MAX_SECS:
         alarm_ringing = False
         print("Alarm timed out")
         return
-    play_path(BOOP_PATH)
+    if now_t >= alarm_next_cycle:
+        tone_path = _alarm_tone_path()
+        for _ in range(ALARM_TONE_REPEATS):
+            play_path(tone_path)
+            if not alarm_ringing:  # silenced mid-cycle
+                return
+        h, m = now()
+        play_sequence(h, m)
+        alarm_next_cycle = time.monotonic() + ALARM_CYCLE_PAUSE
 
 def silence_alarm():
     global alarm_ringing
     alarm_ringing = False
+    print("Alarm silenced")
     h, m = now()
     play_sequence(h, m)
 
@@ -331,6 +376,12 @@ set_minute       = 0
 held             = {PLUS: None, MINUS: None, ANNOUNCE: None}
 last_interaction = None
 VALUE_ENTRY_TIMEOUT = 30.0
+
+# Value-entry repeat state
+# Tracks whether a hold-increment has started and when the next step is due
+value_repeat_key  = None   # which key is being held for repeat
+value_repeat_next = None   # monotonic time of next repeat step
+value_did_repeat  = False  # True if at least one repeat fired this press
 
 def now():
     t = rtc.datetime
@@ -399,68 +450,97 @@ while True:
 
         # --- Set time: hour ---
         elif mode == "set_hour":
-            if event.pressed:
+            if event.pressed and key in (PLUS, MINUS):
+                last_interaction    = now_t
+                value_repeat_key    = key
+                value_repeat_next   = now_t + HOLD_SECONDS
+                value_did_repeat    = False
+            elif event.released and key in (PLUS, MINUS):
+                value_repeat_key  = None
+                value_repeat_next = None
+                last_interaction  = now_t
+                if not value_did_repeat:
+                    # short press - increment and announce
+                    set_hour = (set_hour + 1) % 24 if key == PLUS else (set_hour - 1) % 24
+                play_sequence_hour(set_hour)
+                value_did_repeat = False
+            elif event.pressed and key == ANNOUNCE:
+                value_repeat_key = None
                 last_interaction = now_t
-                if key == PLUS:
-                    set_hour = (set_hour + 1) % 24
-                    play_sequence_hour(set_hour)
-                elif key == MINUS:
-                    set_hour = (set_hour - 1) % 24
-                    play_sequence_hour(set_hour)
-                elif key == ANNOUNCE:
-                    mode = "set_minute"
-                    play_sequence_minute(set_minute)
+                mode = "set_minute"
+                play_sequence_minute(set_minute)
 
         # --- Set time: minute ---
         elif mode == "set_minute":
-            if event.pressed:
+            if event.pressed and key in (PLUS, MINUS):
+                last_interaction    = now_t
+                value_repeat_key    = key
+                value_repeat_next   = now_t + HOLD_SECONDS
+                value_did_repeat    = False
+            elif event.released and key in (PLUS, MINUS):
+                value_repeat_key  = None
+                value_repeat_next = None
+                last_interaction  = now_t
+                if not value_did_repeat:
+                    set_minute = (set_minute + 1) % 60 if key == PLUS else (set_minute - 1) % 60
+                play_sequence_minute(set_minute)
+                value_did_repeat = False
+            elif event.pressed and key == ANNOUNCE:
+                value_repeat_key = None
                 last_interaction = now_t
-                if key == PLUS:
-                    set_minute = (set_minute + 1) % 60
-                    play_sequence_minute(set_minute)
-                elif key == MINUS:
-                    set_minute = (set_minute - 1) % 60
-                    play_sequence_minute(set_minute)
-                elif key == ANNOUNCE:
-                    t = rtc.datetime
-                    rtc.datetime = time.struct_time((
-                        t.tm_year, t.tm_mon, t.tm_mday,
-                        set_hour, set_minute, 0,
-                        t.tm_wday, t.tm_yday, t.tm_isdst
-                    ))
-                    mode = "normal"
-                    play_sequence(set_hour, set_minute)
+                t = rtc.datetime
+                rtc.datetime = time.struct_time((
+                    t.tm_year, t.tm_mon, t.tm_mday,
+                    set_hour, set_minute, 0,
+                    t.tm_wday, t.tm_yday, t.tm_isdst
+                ))
+                mode = "normal"
+                play_sequence(set_hour, set_minute)
 
         # --- Set alarm: hour ---
         elif mode == "set_alarm_hour":
-            if event.pressed:
+            if event.pressed and key in (PLUS, MINUS):
+                last_interaction    = now_t
+                value_repeat_key    = key
+                value_repeat_next   = now_t + HOLD_SECONDS
+                value_did_repeat    = False
+            elif event.released and key in (PLUS, MINUS):
+                value_repeat_key  = None
+                value_repeat_next = None
+                last_interaction  = now_t
+                if not value_did_repeat:
+                    set_hour = (set_hour + 1) % 24 if key == PLUS else (set_hour - 1) % 24
+                play_sequence_hour_alarm(set_hour)
+                value_did_repeat = False
+            elif event.pressed and key == ANNOUNCE:
+                value_repeat_key = None
                 last_interaction = now_t
-                if key == PLUS:
-                    set_hour = (set_hour + 1) % 24
-                    play_sequence_hour(set_hour)
-                elif key == MINUS:
-                    set_hour = (set_hour - 1) % 24
-                    play_sequence_hour(set_hour)
-                elif key == ANNOUNCE:
-                    mode = "set_alarm_minute"
-                    play_sequence_minute(set_minute)
+                mode = "set_alarm_minute"
+                play_sequence_minute(set_minute)
 
         # --- Set alarm: minute ---
         elif mode == "set_alarm_minute":
-            if event.pressed:
+            if event.pressed and key in (PLUS, MINUS):
+                last_interaction    = now_t
+                value_repeat_key    = key
+                value_repeat_next   = now_t + HOLD_SECONDS
+                value_did_repeat    = False
+            elif event.released and key in (PLUS, MINUS):
+                value_repeat_key  = None
+                value_repeat_next = None
+                last_interaction  = now_t
+                if not value_did_repeat:
+                    set_minute = (set_minute + 1) % 60 if key == PLUS else (set_minute - 1) % 60
+                play_sequence_minute(set_minute)
+                value_did_repeat = False
+            elif event.pressed and key == ANNOUNCE:
+                value_repeat_key = None
                 last_interaction = now_t
-                if key == PLUS:
-                    set_minute = (set_minute + 1) % 60
-                    play_sequence_minute(set_minute)
-                elif key == MINUS:
-                    set_minute = (set_minute - 1) % 60
-                    play_sequence_minute(set_minute)
-                elif key == ANNOUNCE:
-                    config["alarm_hour"]   = set_hour
-                    config["alarm_minute"] = set_minute
-                    save_config(config)
-                    mode = "normal"
-                    play_sequence(set_hour, set_minute)
+                config["alarm_hour"]   = set_hour
+                config["alarm_minute"] = set_minute
+                save_config(config)
+                mode = "normal"
+                play_sequence(set_hour, set_minute)
 
     # --- Long press PLUS/MINUS in normal mode: enter menu ---
     if mode == "normal" and not menu.active:
@@ -483,6 +563,24 @@ while True:
             mode = "normal"
             last_interaction = None
             play_token("menu.exit")
+
+    # --- Value-entry hold repeat ---
+    if value_repeat_key is not None and mode in ("set_hour", "set_minute", "set_alarm_hour", "set_alarm_minute"):
+        if now_t >= value_repeat_next:
+            value_did_repeat   = True
+            value_repeat_next  = now_t + VALUE_REPEAT_INTERVAL
+            last_interaction   = now_t
+            if value_repeat_key == PLUS:
+                if mode in ("set_hour", "set_alarm_hour"):
+                    set_hour = (set_hour + 1) % 24
+                else:
+                    set_minute = (set_minute + 1) % 60
+            else:
+                if mode in ("set_hour", "set_alarm_hour"):
+                    set_hour = (set_hour - 1) % 24
+                else:
+                    set_minute = (set_minute - 1) % 60
+            play_path(BEEP_PATH)
 
     # --- Menu inactivity timeout ---
     menu.tick()

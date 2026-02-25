@@ -140,3 +140,23 @@ def resolve_token(voice_entry, token):
         return f"{voice_entry['path']}/audio/{filename}"
     print(f"Token '{token}' not found, using fallback")
     return FALLBACK_AUDIO
+
+
+def scan_alarm_tones():
+    # Scan for available alarm tones.
+    # Returns ordered list of dicts: index, filename, path.
+    # Index 0 is always volume_boop.wav, 1+ are from audio_assets/alarms/.
+    tones = [{"index": 0, "filename": "volume_boop.wav", "path": "/sd/audio_assets/volume_boop.wav"}]
+    alarms_dir = f"{SD_ROOT}/audio_assets/alarms"
+    try:
+        entries = sorted(os.listdir(alarms_dir))
+    except OSError:
+        entries = []
+    for i, name in enumerate(entries, start=1):
+        if name.endswith(".wav"):
+            tones.append({
+                "index": i,
+                "filename": name,
+                "path": f"{alarms_dir}/{name}",
+            })
+    return tones
