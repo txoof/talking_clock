@@ -6,24 +6,25 @@ Accessible clock that announces the time
 
 ## Bugs
 
-- [ ] Long-press of the announcement button does not appear to exit the menu
-- [ ] Long-press of any button does not appear to exit the menu
+- [x] Long-press of the announcement button does not appear to exit the menu
+- [x] Long-press of any button does not appear to exit the menu
 
 ## Firmware / Features
 
-- [ ] Need to make sure time announcement works as expected
-- [ ] Need to build out alarm
+- [x] Need to make sure time announcement works as expected
+- [x] Need to build out alarm
 - [x] Print menu levels to serial terminal for debugging
-- [ ] Implement new rules on clock to use updated voice model vocabulary and rules
+- [x] Implement new rules on clock to use updated voice model vocabulary and rules
 
 ## UX / Audio
 
-- [ ] When setting the alarm, AM and PM (or equivalent) must be used in all cases
+- [x] When setting the alarm, AM and PM (or equivalent) must be used in all cases
 - [x] When entering settings mode, it appears to advance two menu places
 - [x] Rename menu items: replace "Alarm" with "Toggle Alarm" and "Set Alarm" with "Set Alarm Time"
 - [x] When toggling alarm, device should announce "Alarm is on" or "Alarm is off"
-- [ ] Need sound effects for alarm
+- [x] Need sound effects for alarm
 - [ ] Nederlandse stem is erg traag "...elf....over.....negen"
+- [ ] Add menu item to wipe config
 
 ## Audio Package
 
@@ -35,6 +36,13 @@ Accessible clock that announces the time
 ## Localization
 
 - [x] Verify Dutch time logic produces natural phrasing (e.g. 8:10 should be "acht tien" not "tien over acht")
+
+## Deployment
+
+- [ ] Script to set up SD Card
+- [ ] Script to deploy voices and default configuration to SD card
+  - [ ] Interactive option to set voice, etc. while deploying
+- [ ] 
 
 ## Audio sample requirements
 
@@ -97,7 +105,18 @@ sample_rate=22050|channels=1|sample_fmt=s16
 
 ### Audio Files
 
-| Asset                                                        | Attribution                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| [volume_boop.wav](./clock_code/audio_assets/volume_boop.wav) | [546974__finix473__ui_click](https://freesound.org/people/finix473/sounds/546974/) |
-|                                                              |                                                                                    |
+| Asset                                                                                            | Attribution                                                                        |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| [volume_boop.wav](./clock_code/sd_card/audio_assets/volume_boop.wav)                             | [546974__finix473__ui_click](https://freesound.org/people/finix473/sounds/546974/) |
+| [alarms/accepted-sweet.wav](./clock_code/sd_card/audio_assets/alarms/accepted-sweet.wav)         | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/adventure-harp.wav](./clock_code/sd_card/audio_assets/alarms/adventure-harp.wav)         | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/bell-motif.wav](./clock_code/sd_card/audio_assets/alarms/bell-motif.wav)                 | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/sine-aww.wav](./clock_code/sd_card/audio_assets/alarms/sine-aww.wav)                     | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/sine-cellular.wav](./clock_code/sd_card/audio_assets/alarms/sine-cellular.wav)           | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/welcome-home-synth.wav](./clock_code/sd_card/audio_assets/alarms/welcome-home-synth.wav) | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/xd-mewtwo.wav](./clock_code/sd_card/audio_assets/alarms/xd-mewtwo.wav)                   | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms/xmas-miracle.wav](./clock_code/sd_card/audio_assets/alarms/xmas-miracle.wav)             | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
+| [alarms](./clock_code/sd_card/audio_assets/alarms/digital-alarm.wav)                             | [Tempouser](https://freesound.org/people/Tempouser/)                               |
+| [beep.wav](./clock_code/sd_card/audio_assets/beep.wav)                                           | [thisusernameis](https://freesound.org/people/thisusernameis/)                     |
+|                                                                                                  |                                                                                    |
+
