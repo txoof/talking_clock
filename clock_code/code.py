@@ -18,9 +18,14 @@ import adafruit_ds3231
 
 from voices import scan_voices, resolve_token, load_rules, scan_alarm_tones
 from menu import Menu
+from debug_mode import check_debug_boot, run_debug_mode
 import pico_rules
 
-VERSION = "0.3.3"
+VERSION = "0.3.5"
+
+# --- Debug boot check (must run before keypad.Keys takes GP6) ---
+
+_debug_boot = check_debug_boot()
 
 # --- Hardware init ---
 
@@ -37,19 +42,30 @@ gain = digitalio.DigitalInOut(board.GP13)
 gain.direction = digitalio.Direction.OUTPUT
 gain.value = True
 
-keys = keypad.Keys(
-    (board.GP6, board.GP7, board.GP8),
-    value_when_pressed=False,
-    pull=True,
-)
 ANNOUNCE = 0
 PLUS     = 1
 MINUS    = 2
+
+if not _debug_boot:
+    keys = keypad.Keys(
+        (board.GP6, board.GP7, board.GP8),
+        value_when_pressed=False,
+        pull=True,
+    )
 
 audio = audiobusio.I2SOut(bit_clock=board.GP11, word_select=board.GP12, data=board.GP10)
 mixer = audiomixer.Mixer(voice_count=1, sample_rate=22050, channel_count=1,
                          bits_per_sample=16, samples_signed=True, buffer_size=2048)
 audio.play(mixer)
+
+# --- Enter debug mode if ANNOUNCE was held at boot ---
+
+if _debug_boot:
+    print("Debug mode requested - handing off")
+    run_debug_mode(mixer)
+    # run_debug_mode never returns; reboot to exit
+    while True:
+        pass
 
 # --- Config ---
 
@@ -214,8 +230,6 @@ def load_menu_items():
                 for m in active_voice.get("modes", [])
             ]
         elif item["id"] == "alarm_tone":
-            # Options populated from scanned tones at runtime.
-            # audio_token is None - menu will play index + tone preview instead.
             item["options"] = [
                 {"value": t["path"], "audio_token": None, "index": t["index"], "path": t["path"]}
                 for t in alarm_tones
@@ -253,12 +267,10 @@ def on_action(action):
         active_voice_name, active_voice = load_voice(name)
         print(f"Voice reloaded: {active_voice_name}")
         reload_rules()
-        # Confirm in the new voice
         play_token("menu.enter")
 
     elif action == "reload_mode":
         reload_rules()
-        # Play the mode name then a sample of the current time
         play_token(f"mode.{config['mode']}")
         h, m = now()
         play_sequence(h, m)
@@ -300,7 +312,7 @@ ALARM_CYCLE_PAUSE  = 3.0  # seconds between cycles
 
 alarm_ringing    = False
 alarm_start      = None
-alarm_next_cycle = None  # monotonic time when next cycle should start
+alarm_next_cycle = None
 
 def _alarm_tone_path():
     return config.get("alarm_tone", "/sd/audio_assets/volume_boop.wav")
@@ -330,7 +342,7 @@ def tick_alarm():
         tone_path = _alarm_tone_path()
         for _ in range(ALARM_TONE_REPEATS):
             play_path(tone_path)
-            if not alarm_ringing:  # silenced mid-cycle
+            if not alarm_ringing:
                 return
         h, m = now()
         play_sequence(h, m)
@@ -377,11 +389,9 @@ held             = {PLUS: None, MINUS: None, ANNOUNCE: None}
 last_interaction = None
 VALUE_ENTRY_TIMEOUT = 30.0
 
-# Value-entry repeat state
-# Tracks whether a hold-increment has started and when the next step is due
-value_repeat_key  = None   # which key is being held for repeat
-value_repeat_next = None   # monotonic time of next repeat step
-value_did_repeat  = False  # True if at least one repeat fired this press
+value_repeat_key  = None
+value_repeat_next = None
+value_did_repeat  = False
 
 def now():
     t = rtc.datetime
@@ -460,7 +470,6 @@ while True:
                 value_repeat_next = None
                 last_interaction  = now_t
                 if not value_did_repeat:
-                    # short press - increment and announce
                     set_hour = (set_hour + 1) % 24 if key == PLUS else (set_hour - 1) % 24
                 play_sequence_hour(set_hour)
                 value_did_repeat = False
