@@ -19,11 +19,10 @@ def find_yaml_files(search_dir='.'):
     """Find all time phrase YAML files in directory."""
     search_path = Path(search_dir)
     yaml_files = []
-    
-    # Check common locations
+
     for pattern in ['time_phrases_*.yaml', 'time_formats/time_phrases_*.yaml', '*/time_phrases_*.yaml']:
         yaml_files.extend(search_path.glob(pattern))
-    
+
     return sorted(set(yaml_files))
 
 
@@ -32,8 +31,8 @@ def find_model_files(model_dir='./models'):
     model_path = Path(model_dir)
     if not model_path.exists():
         return []
-    
-    return [f for f in model_path.rglob('*.onnx') 
+
+    return [f for f in model_path.rglob('*.onnx')
             if not f.name.endswith('.onnx.json')]
 
 
@@ -42,20 +41,22 @@ def find_model_files(model_dir='./models'):
 @click.option('--quiet', '-q', is_flag=True, help='Suppress all output except errors')
 def cli(verbose, quiet):
     """Generate multilingual time phrase audio files.
-    
+
     \b
     Common commands:
       tca list-models --remote              List available voice models
       tca get-model --locale en_US --voice lessac --quality medium
       tca validate --yaml <file> --mode casual
       tca generate --yaml <file> --mode casual --model <path>
-    
+      tca debug --yaml speaker_test.yaml --model <path>
+
     \b
     Interactive mode (prompts for missing options):
       tca generate
       tca validate
       tca get-model
-    
+      tca debug
+
     \b
     For detailed help:
       tca <command> --help
@@ -73,13 +74,13 @@ def cli(verbose, quiet):
               help='List locally downloaded models (default)')
 @click.option('--remote', 'source', flag_value='remote',
               help='List available models from Hugging Face')
-@click.option('--model-dir', default='./models', 
+@click.option('--model-dir', default='./models',
               help='Directory containing local models (default: ./models)')
 def list_models(source, model_dir):
     """List available voice models."""
     if source == 'remote':
         import pycountry
-        
+
         def get_locale_name(locale_code):
             """Convert locale code to readable name."""
             try:
@@ -93,18 +94,18 @@ def list_models(source, model_dir):
                 return locale_code
             except:
                 return locale_code
-        
+
         click.echo("Fetching available models from Hugging Face...")
         voices = get_available_voices()
-        
+
         by_locale = {}
         for v in voices:
             if v.locale not in by_locale:
                 by_locale[v.locale] = []
             by_locale[v.locale].append(v)
-        
+
         click.echo(f"\nFound {len(voices)} voices in {len(by_locale)} locales:\n")
-        
+
         for locale in sorted(by_locale.keys()):
             locale_name = get_locale_name(locale)
             click.echo(f"{locale} - {locale_name}:")
@@ -112,23 +113,23 @@ def list_models(source, model_dir):
                 path = f"  {v.locale}/{v.voice_name}/{v.quality}"
                 click.echo(path)
             click.echo()
-    
+
     else:
         model_path = Path(model_dir)
         if not model_path.exists():
             click.echo(f"Model directory not found: {model_dir}")
             return
-        
+
         onnx_files = find_model_files(model_dir)
-        
+
         if not onnx_files:
             click.echo(f"No models found in {model_dir}")
             click.echo("\nTo download models:")
             click.echo("  tca get-model --locale en_US --voice lessac --quality medium")
             return
-        
+
         click.echo(f"Found {len(onnx_files)} local models in {model_dir}:\n")
-        
+
         for onnx_file in sorted(onnx_files):
             click.echo(f"  {onnx_file}")
 
@@ -141,76 +142,72 @@ def list_models(source, model_dir):
               help='Directory to download to (default: ./models)')
 def get_model(locale, voice, quality, model_dir):
     """Download a voice model from Hugging Face.
-    
+
     \b
     Interactive mode (prompts for missing options):
       tca get-model
-    
+
     \b
     Expert mode (all options specified):
       tca get-model --locale en_US --voice lessac --quality medium
     """
     from huggingface_hub import hf_hub_download
-    
+
     try:
-        # Interactive prompts for missing options
         if not locale or not voice or not quality:
             click.echo("Fetching available models...")
             voices = get_available_voices()
-            
+
             if not locale:
                 locales = sorted(set(v.locale for v in voices))
                 locale = questionary.select(
                     "Select locale:",
                     choices=locales
                 ).ask()
-                
+
                 if not locale:
                     click.echo("Cancelled.")
                     return
-            
-            # Filter by locale
+
             locale_voices = [v for v in voices if v.locale == locale]
-            
+
             if not voice:
                 voice_names = sorted(set(v.voice_name for v in locale_voices))
                 voice = questionary.select(
                     "Select voice:",
                     choices=voice_names
                 ).ask()
-                
+
                 if not voice:
                     click.echo("Cancelled.")
                     return
-            
-            # Filter by voice
+
             voice_options = [v for v in locale_voices if v.voice_name == voice]
-            
+
             if not quality:
                 qualities = sorted(set(v.quality for v in voice_options))
                 quality = questionary.select(
                     "Select quality:",
                     choices=qualities
                 ).ask()
-                
+
                 if not quality:
                     click.echo("Cancelled.")
                     return
-        
-        # Construct paths
+
         language = locale.split('_')[0]
         base_path = f"{language}/{locale}/{voice}/{quality}"
         model_filename = f"{locale}-{voice}-{quality}.onnx"
         config_filename = f"{model_filename}.json"
-        
+
         onnx_path = f"{base_path}/{model_filename}"
         config_path = f"{base_path}/{config_filename}"
-        
+
         click.echo(f"\nDownloading model: {locale}/{voice}/{quality}")
         click.echo(f"Destination: {model_dir}")
-        
+
         repo_id = "rhasspy/piper-voices"
-        
+
         click.echo(f"\nDownloading {model_filename}...")
         onnx_file = hf_hub_download(
             repo_id=repo_id,
@@ -218,7 +215,7 @@ def get_model(locale, voice, quality, model_dir):
             local_dir=model_dir,
             local_dir_use_symlinks=False
         )
-        
+
         click.echo(f"Downloading {config_filename}...")
         config_file = hf_hub_download(
             repo_id=repo_id,
@@ -226,14 +223,13 @@ def get_model(locale, voice, quality, model_dir):
             local_dir=model_dir,
             local_dir_use_symlinks=False
         )
-        
+
         click.echo("\nDownload complete!")
         click.echo(f"Model file: {onnx_file}")
-        
-        # Show command to repeat
+
         click.echo("\nTo repeat this operation:")
         click.echo(f"  tca get-model --locale {locale} --voice {voice} --quality {quality}")
-        
+
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise click.Abort()
@@ -264,11 +260,9 @@ def validate_config(yaml_path, mode, samples):
     from pathlib import Path as _Path
     from .phrase_generator import generate_phrase_tokens, get_all_vocab_with_dedup
 
-    # Locate pico_rules relative to this package installation.
-    # It lives in clock_code/ at the repo root, two levels up from src/.
-    _pkg_dir = _Path(__file__).parent          # src/talking_clock_audio/
-    _src_dir = _pkg_dir.parent                  # src/
-    _repo_root = _src_dir.parent               # talking-clock-audio/
+    _pkg_dir = _Path(__file__).parent
+    _src_dir = _pkg_dir.parent
+    _repo_root = _src_dir.parent
     _clock_code = _repo_root.parent / "clock_code"
     if str(_clock_code) not in sys.path:
         sys.path.insert(0, str(_clock_code))
@@ -311,7 +305,6 @@ def validate_config(yaml_path, mode, samples):
         vocab_map, audio_files = get_all_vocab_with_dedup(config)
         file_to_key = {v: k for k, v in vocab_map.items()}
 
-        # Build pico rules and vocab once if pico_rules is available
         if _pico_rules:
             pico_rules_data = generate_rules(config)
         else:
@@ -359,7 +352,6 @@ def validate_config(yaml_path, mode, samples):
 
             mode_errors = 0
 
-            # --- Sample phrases table ---
             click.echo(f"\nSample phrases:")
             click.echo(f"  {'Time':<8} {'Description':<14} {'Generated'}")
             click.echo(f"  {'-'*7} {'-'*13} {'-'*35}")
@@ -373,7 +365,6 @@ def validate_config(yaml_path, mode, samples):
                     click.echo(f"  {hour:02d}:{minute:02d}  {description:<14} [NO MATCH]")
                     mode_errors += 1
 
-            # --- rendered_examples check ---
             rendered = config.get("rendered_examples", {})
             if rendered:
                 click.echo(f"\nChecking rendered_examples:")
@@ -384,7 +375,6 @@ def validate_config(yaml_path, mode, samples):
                         if check_mode not in mode_phrases:
                             continue
 
-                        # YAML parses HH:MM as integer seconds (H*60+M)
                         if isinstance(time_val, int):
                             h, m = time_val // 60, time_val % 60
                         else:
@@ -400,7 +390,6 @@ def validate_config(yaml_path, mode, samples):
                                 f"         got:      {got!r}"
                             )
 
-                        # Pico cross-check
                         if pico_rules_data:
                             pico_files = _pico_rules.get_audio_files(
                                 pico_rules_data, vocab_map, check_mode, h, m
@@ -425,7 +414,6 @@ def validate_config(yaml_path, mode, samples):
                     )
                     click.echo(f"  OK: all {example_count} examples matched")
 
-            # --- Coverage check: all 1440 times ---
             coverage_failures = []
             for h in range(24):
                 for m in range(60):
@@ -496,7 +484,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
       tca generate --yaml time_phrases_en_US.yaml --model ./models/.../model.onnx
     """
     try:
-        # Interactive prompt for YAML
         if not yaml_path:
             yaml_files = find_yaml_files()
 
@@ -515,7 +502,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
                 click.echo("Cancelled.")
                 return
 
-        # Load config
         config = load_time_phrases(yaml_path)
         locale = config['locale']
         modes = list(config['modes'].keys())
@@ -524,32 +510,30 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
             click.echo("Error: no modes defined in YAML", err=True)
             return
 
-        # Interactive prompt for model
         if not model:
             model_files = find_model_files()
-            
+
             if not model_files:
                 click.echo("\nNo local models found.")
                 click.echo("Download a model first:")
                 click.echo("  tca get-model")
                 return
-            
+
             choices = [str(f) for f in model_files]
             model = questionary.select(
                 "Select voice model:",
                 choices=choices
             ).ask()
-            
+
             if not model:
                 click.echo("Cancelled.")
                 return
-        
+
         model_path = Path(model)
         if not model_path.exists():
             click.echo(f"Error: Model file not found: {model}", err=True)
             return
 
-        # Determine output directory
         model_filename = model_path.stem
         try:
             parts = model_filename.split('-')
@@ -567,7 +551,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
 
         output_path = Path(output_dir)
 
-        # Check for existing files
         if output_path.exists() and not force:
             audio_dir = output_path / 'audio'
             if audio_dir.exists() and list(audio_dir.glob('*.wav')):
@@ -576,7 +559,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
                     click.echo("Aborted.")
                     return
 
-        # Show configuration
         click.echo(f"\nLocale: {locale}")
         click.echo(f"Modes: {', '.join(modes)}")
         click.echo(f"Voice model: {model}")
@@ -601,7 +583,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
         for mode_name, size in rule_sizes.items():
             click.echo(f"  {mode_name}_rules.json: {size} bytes")
 
-        # Report results
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")
         click.echo("="*60)
@@ -627,6 +608,135 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
             cmd += f" --speaker-threshold {speaker_threshold}"
         if highpass_cutoff != DEFAULT_HIGHPASS_CUTOFF:
             cmd += f" --highpass-cutoff {highpass_cutoff}"
+        click.echo(cmd)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command('debug')
+@click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
+              help='Path to debug configuration YAML file')
+@click.option('--model', help='Path to voice model .onnx file')
+@click.option('--output-dir', default='./audio/debug',
+              help='Output directory (default: ./audio/debug)')
+@click.option('--force', is_flag=True,
+              help='Overwrite existing files without warning')
+def generate_debug(yaml_path, model, output_dir, force):
+    """Generate speaker test audio from a debug configuration.
+
+    Produces one subdirectory per variant under the output directory.
+    Each subdirectory contains a label file and one WAV per sentence,
+    processed with the variant's filter and limiter settings.
+    Sentences are normalized to a fixed peak before processing so that
+    filter and limiter comparisons are not confounded by volume differences.
+
+    \b
+    Interactive mode (prompts for missing options):
+      tca debug
+
+    \b
+    Expert mode:
+      tca debug --yaml speaker_test.yaml --model ./models/.../model.onnx
+    """
+    from .debug_generator import load_debug_yaml, generate_debug_package
+
+    try:
+        if not yaml_path:
+            debug_yamls = sorted(set(
+                list(Path('.').glob('*debug*.yaml')) +
+                list(Path('.').glob('*speaker*.yaml')) +
+                list(Path('.').glob('*test*.yaml'))
+            ))
+
+            if not debug_yamls:
+                click.echo("No debug YAML files found in current directory.")
+                click.echo("Expected filenames matching: *debug*.yaml, *speaker*.yaml, *test*.yaml")
+                return
+
+            choices = [str(f) for f in debug_yamls]
+            yaml_path = questionary.select(
+                "Select debug configuration file:",
+                choices=choices
+            ).ask()
+
+            if not yaml_path:
+                click.echo("Cancelled.")
+                return
+
+        config = load_debug_yaml(yaml_path)
+        sentences = config["sentences"]
+        variants = config["variants"]
+
+        if not model:
+            model_files = find_model_files()
+
+            if not model_files:
+                click.echo("\nNo local models found.")
+                click.echo("Download a model first:")
+                click.echo("  tca get-model")
+                return
+
+            choices = [str(f) for f in model_files]
+            model = questionary.select(
+                "Select voice model:",
+                choices=choices
+            ).ask()
+
+            if not model:
+                click.echo("Cancelled.")
+                return
+
+        model_path = Path(model)
+        if not model_path.exists():
+            click.echo(f"Error: Model file not found: {model}", err=True)
+            return
+
+        output_path = Path(output_dir)
+        if output_path.exists() and not force:
+            existing = list(output_path.iterdir())
+            if existing:
+                click.echo(f"\nWarning: Output directory already exists: {output_dir}")
+                if not questionary.confirm("Overwrite existing files?").ask():
+                    click.echo("Aborted.")
+                    return
+
+        click.echo(f"\nSentences: {len(sentences)}")
+        for i, s in enumerate(sentences, start=1):
+            click.echo(f"  {i}. {s}")
+        click.echo(f"\nVariants: {len(variants)}")
+        for v in variants:
+            cutoff = v.get('highpass_cutoff')
+            threshold = v.get('speaker_threshold')
+            click.echo(
+                f"  {v['name']:<24} "
+                f"highpass={f'{cutoff}Hz' if cutoff else 'off':<12} "
+                f"threshold={threshold if threshold else 'off'}"
+            )
+        click.echo(f"\nVoice model: {model}")
+        click.echo(f"Output: {output_dir}")
+        click.echo("\nGenerating...")
+
+        stats = generate_debug_package(config, model_path, output_dir)
+
+        click.echo("\n" + "="*60)
+        click.echo("Done!")
+        click.echo("="*60)
+        click.echo(f"Output:  {stats['output_dir']}")
+        click.echo(f"Success: {stats['total_success']} files")
+        if stats['total_failure']:
+            click.echo(f"Failed:  {stats['total_failure']} files")
+            for vr in stats['variants']:
+                for err in vr['errors']:
+                    click.echo(f"  {err}")
+
+        click.echo("\nTo repeat this operation:")
+        cmd = f"  tca debug --yaml {yaml_path} --model {model}"
+        if output_dir != './audio/debug':
+            cmd += f" --output-dir {output_dir}"
+        if force:
+            cmd += " --force"
         click.echo(cmd)
 
     except Exception as e:
