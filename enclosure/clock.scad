@@ -31,9 +31,9 @@ clockZ=60;
 
 /* [Components] */
 // speaker diameter
-speakerDia = 40;
+speakerDia = 72.8;
 // speaker total Z height
-speakerHeight = 18;
+speakerHeight = 25;
 // X position (internal) from center
 speakerXpos = 0;
 // Z position (internal) from center
@@ -320,9 +320,9 @@ module layout(threeD=true) {
     //             children(5);
     
     translate([speakerXpos, -clockY/2 + speakerHeight + material, speakerDia/2 + material]){
-        rotate([90, 0, 0])
+        rotate([180, 0, 0])
         // speaker(dia=speakerDia, height=speakerHeight);
-        speaker();
+        speaker(dia=speakerDia, height=speakerHeight);
     }
 
     
