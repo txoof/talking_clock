@@ -6,6 +6,12 @@
 cpfiles.bak
 **/stubArchive
 
+# venv
+venv_activate
+*venv*
+
+
+
 # vscode
 **/.vscode/
 
