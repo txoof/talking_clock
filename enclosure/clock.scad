@@ -23,26 +23,25 @@ lidFinger = finger;
 
 /* [Dimensions] */
 // External X
-clockX=100;
+clockX=130;
 // External Y
 clockY=100;
 // External Z
-clockZ=60;
+clockZ=50;
 
 /* [Components] */
 // speaker diameter
 speakerDia = 72.8;
+// speaker magnet diameter
+magnetDia = 35.5;
 // speaker total Z height
 speakerHeight = 25;
-// X position (internal) from center
-speakerXpos = 0;
-// Z position (internal) from center
-speakerZpos = 0;
+
 
 // Switch X position (on lid) from center
 switchX = 0;
 // Switch Y position (on lid) from center
-switchY = 0;
+switchY = - clockY/4;
 
 // USB Connector Overmolding X 
 usbOverX = 15;
@@ -72,6 +71,14 @@ cutout_border = 4.5;//[0:.1:10]
 
 /* [Hidden] */
 caseSize = [clockX, clockY, clockZ];
+
+
+// X position (internal) from center
+speakerXpos = -(clockX/2 - speakerDia/2 - material * 1.5);
+// Y position (internal from center)
+speakerYpos = (clockY/2 - speakerDia/2 - material * 1.5);
+// Z position (internal) from center
+speakerZpos = 0;
 
 // patch this many fingers for the USB port
 // usbPortFingerPatch = (((usbOverX + 2 * cutout_border) % finger) + 2) * finger;
@@ -319,10 +326,11 @@ module layout(threeD=true) {
     //             linear_extrude(height=material, center=true)
     //             children(5);
     
-    translate([speakerXpos, -clockY/2 + speakerHeight + material, speakerDia/2 + material]){
+    // translate([speakerXpos, -clockY/2 + speakerHeight + material, speakerDia/2 + material]){
+    translate([speakerXpos, speakerYpos, speakerHeight+material]) {
         rotate([180, 0, 0])
         // speaker(dia=speakerDia, height=speakerHeight);
-        speaker(dia=speakerDia, height=speakerHeight);
+        speaker(dia=speakerDia, magnetDia=magnetDia, height=speakerHeight);
     }
 
     
