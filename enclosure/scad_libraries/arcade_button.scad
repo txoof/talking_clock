@@ -32,7 +32,7 @@ module arcadeSwitch(body_z=29.5,
 }
 
 module arcadeSwitchCutter(body_d=30, $fn=128) {
-  cylinder(h=2, d=body_d, center=true);
+  circle(d=body_d);
 }
 
 // arcadeSwitch();
