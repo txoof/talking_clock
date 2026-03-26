@@ -9,7 +9,7 @@ use<./scad_libraries/speaker_grill.scad>
 /*[Project Setup]*/
 // VERSION="Clock V0.0";
 // False: SVG layout, True: 3D Visualization
-ThreeD = false;
+ThreeD = true;
 
 
 /* [Material and Design] */
@@ -24,41 +24,72 @@ lidFinger = finger;
 
 /* [Dimensions] */
 // External X
-clockX=130;
+clockX=100;
 // External Y
-clockY=100;
+clockY=75;
 // External Z
-clockZ=50;
+clockZ=55;
 
-/* [Components] */
+/* [Speaker] */
 // speaker diameter
-speakerDia = 72.8;
+speakerDia = 37.8;
 // speaker magnet diameter
-magnetDia = 35.5;
+magnetDia = 22;
 // speaker total Z height
 speakerHeight = 25;
+// Speaker X position (from center)
+speakerXpos = clockX/-2 + speakerDia/2 + material*1.5;
+// Speaker Y position (from center)
+speakerYpos = 0;
 
-// set button X
+/* [Set Button] */
+// announcement button X
 buttonX = 25;
-// set button Y
+// announcement button Y
 buttonY = 10;
 
+/* [Announcement Button] */
 // Switch X position (on lid) from center
 switchX = 0;
 // Switch Y position (on lid) from center
-switchY = - clockY/4;
+switchY = 0;
 
+/* [USB Connector with Over Molding] */
 // USB Connector Overmolding X 
 usbOverX = 15;
 // USB Connector Overmolding Y
 usbOverY = 9;
 
-// Potentiometer 
-potXpos = clockX/3 *2;
-potZpos = clockZ/3 *2;
-potBodyDim = [10, 12, 8.4];
-potBushingDia = 9;
-potBushingLen = 5;
+
+// Real time Clock X
+rtcX = 35;
+// Real time Clock Y
+rtcY = 22;
+// Real time clock Z
+rtcZ = 6.5;
+
+// MAX98357A Amp X
+maxX = 18;
+// MAX98357A Amp Y
+maxY = 19;
+// MAX98357A Amp Z
+maxZ = 10;
+
+// SD Card Reader X
+sdRX = 42;
+// SD Card Reader Y
+sdRY = 24;
+// SD Card port Clearance (z min)
+sdRClearance = 3.5;
+
+/* [Pi Pico] */
+// Pico X Dimensions
+picoX = 51.5;
+// Pico Y Dimensions
+picoY = 21;
+// Pico X Position (from center)
+// Pico Y Position (from center)
+
 
 
 /* [Look and Feel] */
@@ -69,26 +100,29 @@ chamfer_r = 2; //[0:.1:3]
 // //voronoi wall thickness
 // vor_thick=.8;//[0.25:0.01:2]
 //cutout border to use around all IO ports
-cutout_border = 4.5;//[0:.1:10]
+cutout_border = 4;//[0:.1:10]
 
 /* [Hidden] */
 caseSize = [clockX, clockY, clockZ];
-//border at edge 
-vor_border=(6+material)*2;
 
+// //border at edge 
+// vor_border=(6+material)*2;
+
+// border around port
 border = (material)*4;
 
-
-// X position (internal) from center
-speakerXpos = -(clockX/2 - speakerDia/2 - material * 1.5);
-// Y position (internal from center)
-speakerYpos = (clockY/2 - speakerDia/2 - material * 1.5);
-// Z position (internal) from center
 speakerZpos = 0;
 
 // patch this many fingers for the USB port
 // usbPortFingerPatch = (((usbOverX + 2 * cutout_border) % finger) + 2) * finger;
 usbPortFingerPatch = (floor((usbOverX + 2 * cutout_border) / finger) + ((usbOverX + 2 * cutout_border) % finger > 0 ? 2 : 0)) * finger;
+
+// Dupont Pin - 90 Degree
+pin90len = 5;
+// Dupont pin center-to-center
+pinPitch = 2.54;
+// Dupont pin thickness
+pinThick = 0.64;
 
 
 
@@ -97,8 +131,134 @@ foot_x = (caseSize[0]-usableDiv(maxDiv(caseSize, finger))[0]*finger)/2;
 foot_ratio = .5;
 foot_h = 8;
 
-// Mounting Holes
-mountingHole = 2.9;
+// // Mounting Holes
+// mountingHole = 2.9;
+
+module dupont_pins(count=4, pinPitch=2.54, pinThick=0.64, pin90len=6) {
+    y0 = -((count - 1) * pinPitch) / 2;
+
+    for (i = [0 : count - 1]) {
+        translate([0, y0 + i * pinPitch, 0]) {
+            cube([pin90len + 4, pinThick, pinThick], center=true);
+        }
+    }
+}
+
+module rtc() {
+    color("blue") {
+        cube([rtcX, rtcY, rtcZ], center=true);
+    }
+    
+    color("gold") {
+        translate([rtcX / 2 + pin90len / 2, 0, rtcZ / 2 + pinThick / 2]) {
+            dupont_pins(
+                count=4,
+                pinPitch=pinPitch,
+                pinThick=pinThick,
+                pin90len=pin90len
+            );
+        }
+    }
+
+    color("white") {
+        translate([0, 0, rtcZ / 2]) {
+            linear_extrude(height=0.4) {
+                text("RTC", size=3, halign="center", valign="center");
+            }
+        }
+    }
+}
+
+module maxAmp() {
+    color("red") {
+        cube([maxX, maxY, 2], center=true);
+    }
+
+    color("gold") {
+        translate([maxX/2 - pinThick*1.5, 0, pin90len]) {
+            rotate([0, 90, 0])
+            dupont_pins(
+                count=6,
+                pinPitch=pinPitch,
+                pinThick=pinThick,
+                pin90len=pin90len
+            );
+        }
+    }
+
+    color("white") {
+        translate([0, 0, 2 / 2]) {
+            linear_extrude(height=0.4) {
+                text("MAXAmp", size=3, halign="center", valign="center");
+            }
+        }
+    }
+
+
+
+}
+
+module piPico() {
+    color("Yellow") {
+        cube([picoX, picoY, 2], center=true);
+    }
+
+    color("gold") {
+        translate([0, picoY/2 - pinThick*1.5, pin90len]) {
+            rotate([90, 90, 0])
+            dupont_pins(
+                count=20,
+                pinPitch=pinPitch,
+                pinThick=pinThick,
+                pin90len=pin90len
+            );
+        }
+        translate([0, -picoY/2 + pinThick*1.5, pin90len]) {
+            rotate([90, 90, 0])
+            dupont_pins(
+                count=20,
+                pinPitch=pinPitch,
+                pinThick=pinThick,
+                pin90len=pin90len
+            );
+        }
+
+    }    
+
+    color("white") {
+        translate([0, 0, 2 / 2]) {
+            linear_extrude(height=0.4) {
+                text("Pi Pico", size=3, halign="center", valign="center");
+            }
+        }
+    } 
+
+}
+
+module sdCardReader() {
+    color("green") {
+        cube([sdRX, sdRY, 2], center=true);
+    }
+
+    color("gold") {
+        translate([sdRX / 2 + pin90len / 2, 0, 1 + pinThick / 2]) {
+            dupont_pins(
+                count=6,
+                pinPitch=pinPitch,
+                pinThick=pinThick,
+                pin90len=pin90len
+            );
+        }
+    }
+    
+    color("white") {
+        translate([0, 0, 2 / 2]) {
+            linear_extrude(height=0.4) {
+                text("SD Card Reader", size=3, halign="center", valign="center");
+            }
+        }
+    }      
+}
 
 
 module foot(w, h, ratio, center=false) {
@@ -343,6 +503,14 @@ module layout(threeD=true) {
     color("cornsilk")
     translate([switchX, switchY , clockZ - material/2]) {
             arcadeSwitch();
+    }
+
+
+
+    translate([clockX/2 - picoY/2 - material - usbOverX/2 + cutout_border, clockY/2 - picoX/2 - material, material-1]) {
+        rotate([0, 0, 90]) {
+            piPico();
+        }
     }
   
   } else {
