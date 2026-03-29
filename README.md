@@ -1,6 +1,8 @@
-# talking_clock
+# Talking Clock
 
-Accessible clock that announces the time
+Accessible clock that announces the time on demand by a button push, or periodically.
+
+This clock is designed to be built out of market components, and tell the time in any language for which there is a Piper TTS model. 
 
 # Talking Clock - To Do
 
@@ -32,6 +34,8 @@ Accessible clock that announces the time
 - [x] Build out better rules for operational, broadcast, etc.
 - [x] Build test cases for rules
 - [x] Update tca to generate one directory per voice model with rule files and all samples
+- [ ] update tca to generate all models
+  - [ ] update config yaml to specify favored voice model
 
 ## Localization
 
@@ -101,6 +105,21 @@ Expected output:
 sample_rate=22050|channels=1|sample_fmt=s16
 ```
 
+## Bill of Materials
+
+### Electronics
+
+| Part                         | Specifications               | Notes                                               | Link                                                                                                                            |
+| ---------------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Raspbery Pi Pico             |                              | Pico or Pico W                                      |                                                                                                                                 |
+| SPI SD Card Reader           | 3.3V-5V Level Shifted        |                                                     | [TinyTronics 000375](https://www.tinytronics.nl/en/data-storage/modules/microsd-card-adapter-module-3.3v-5v-with-level-shifter) |
+| I2C DS3231 RTC Module        |                              | Requires Battery                                    | [TinyTronics  005849](https://www.tinytronics.nl/en/sensors/time/keyestudio-ds3231-rtc-module-i2c)                              |
+| I2C MAX98357A Amp            | 3W                           | Clones Available                                    | [Adafruit 3006](https://www.adafruit.com/product/3006)                                                                          |
+| Mono-Speaker                 | 4 ohm 5 Watt                 | Enclosed speaker has superior sound                 | [Kiwi Electronics](https://www.kiwi-electronics.com/en/mono-enclosed-speaker-4-ohm-5w-20413)                                    |
+| Arcade Button                | 30 mm                        |                                                     | [Kiwi Electronics](https://www.kiwi-electronics.com/en/30mm-arcade-button-black-3860?search=arcade%20button)                    |
+| Momentary Push Button Switch | Panel Mount - LxWxH 37x14x14 | 2x Required -  TRU COMPONENTS TC-DT310WS or similar | [Conrad.com](https://www.conrad.com/en/p/tru-components-tc-dt310ws-tc-dt310ws-pushbutton-momentary-1-pc-s-1589423.html)         |
+
+
 ## Attributions
 
 ### Audio Files
@@ -117,6 +136,4 @@ sample_rate=22050|channels=1|sample_fmt=s16
 | [alarms/xd-mewtwo.wav](./clock_code/sd_card/audio_assets/alarms/xd-mewtwo.wav)                   | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
 | [alarms/xmas-miracle.wav](./clock_code/sd_card/audio_assets/alarms/xmas-miracle.wav)             | [akelley6](https://freesound.org/people/akelley6/packs/44231/)                     |
 | [alarms](./clock_code/sd_card/audio_assets/alarms/digital-alarm.wav)                             | [Tempouser](https://freesound.org/people/Tempouser/)                               |
-| [beep.wav](./clock_code/sd_card/audio_assets/beep.wav)                                           | [thisusernameis](https://freesound.org/people/thisusernameis/)                     |
 |                                                                                                  |                                                                                    |
-
