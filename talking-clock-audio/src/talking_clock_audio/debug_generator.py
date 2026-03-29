@@ -4,13 +4,14 @@
 
 Generates triplets of WAV files from a debug YAML configuration.
 Each variant produces:
-  001_label.wav        - spoken label, no processing (consistent reference)
+  001_label.wav        - spoken label, normalized + processed per variant
   002_a.wav            - sentence A, normalized then processed per variant
   003_b.wav ...        - additional sentences, same processing
 
 Normalization (peak target 28000) is applied before the soft limiter so
 that filter/limiter comparisons are not confounded by differences in raw
-Piper output level.
+Piper output level. All files including the label go through the same
+processing so the label sounds consistent with the sentences that follow.
 """
 
 import logging
@@ -94,7 +95,7 @@ def generate_debug_package(
     """Generate speaker test audio for all variants in a debug config.
 
     For each variant, creates a subdirectory under output_dir containing:
-      001_label.wav       - label, no processing
+      001_label.wav       - label, normalized + variant processing
       002_a.wav           - first sentence, normalized + variant processing
       003_b.wav           - second sentence, normalized + variant processing
       ...
@@ -132,7 +133,7 @@ def generate_debug_package(
 
         results = {"name": name, "files": [], "errors": []}
 
-        # 001 - label, no processing
+        # 001 - label, normalized + processed same as sentences
         label_path = variant_dir / "001_label.wav"
         ok = generate_audio_file(
             label, label_path, voice,
@@ -140,6 +141,9 @@ def generate_debug_package(
             highpass_cutoff=None,
         )
         if ok:
+            normalize_wav(label_path)
+            if cutoff is not None or threshold is not None:
+                apply_speaker_processing(label_path, threshold, cutoff)
             results["files"].append(str(label_path))
             total_success += 1
         else:
