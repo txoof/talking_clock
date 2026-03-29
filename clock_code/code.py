@@ -21,7 +21,7 @@ from menu import Menu
 from debug_mode import check_debug_boot, run_debug_mode
 import pico_rules
 
-VERSION = "0.3.5"
+VERSION = "0.3.6"
 
 # --- Debug boot check (must run before keypad.Keys takes GP6) ---
 
@@ -41,6 +41,10 @@ rtc = adafruit_ds3231.DS3231(i2c)
 gain = digitalio.DigitalInOut(board.GP13)
 gain.direction = digitalio.Direction.OUTPUT
 gain.value = True
+
+sd = digitalio.DigitalInOut(board.GP9)
+sd.direction = digitalio.Direction.OUTPUT
+sd.value = True
 
 ANNOUNCE = 0
 PLUS     = 1
