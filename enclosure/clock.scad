@@ -4,11 +4,12 @@ use<./scad_libraries/cone_speaker.scad>
 use<./scad_libraries/speaker_grill.scad>
 use<./scad_libraries/arcade_button.scad>
 use<./scad_libraries/fasteners.scad>
+use<./scad_libraries/cone_speaker.scad>
 
 
 /* [Rendering Setup] */
 
-three_d = 0;
+three_d = 1;
 
 /* [Enclosure Dimensions] */
 // Average material thickness (mm)
@@ -17,11 +18,11 @@ material = 4.0;
 finger = 5;
 
 // Exterior Width
-case_x = 120;
+case_x = 130;
 // Exterior Depth
-case_y = 100;
+case_y = 102;
 // Exterior Height
-case_z = 55; 
+case_z = 58; 
 
 /* [Font] */
 font = "Impact";
@@ -42,6 +43,11 @@ ears=true;
 ear_od=8;
 // ear height
 ear_h=4;
+
+/* [Cone Speaker] */
+cone_dia = 78;
+cone_magnet_dia = 36;
+cone_height = 27;
 
 /* [MAX98357A Amp] */
 max_x = 18;
@@ -119,10 +125,15 @@ pico_rot = [0, 0, 90];
 pico_plate = [pico_x, pico_y, material];
 
 // speaker location
-speaker_loc_x = -1*(case_size[0]/2) + speaker_dim[1]/2 + material*2;
+// speaker_loc_x = -1*(case_size[0]/2) + speaker_dim[1]/2 + material*2;
+speaker_loc_x = -(case_size[0]/2 - cone_dia/2 - material*2);
 speaker_loc_y = 0; // + speaker_dim[0]/2 + material*1.5 + ear_od;
-speaker_loc_z =  speaker_dim[2]/2 + material/2;
-speaker_rot = [0, 0, 90];
+speaker_loc_z = cone_height + material/2;
+// speaker_loc_z =  speaker_dim[2]/2 + material/2;
+// speaker_rot = [0, 0, 90];
+
+speaker_rot = [180, 0, 0];
+
 
 // realtime clock location
 rtc_loc_x = case_size[0]/2 - rtc_x/2 - material*1.5;
@@ -161,7 +172,7 @@ mb_loc_z = pb_loc_z;
 
 // announcement button location
 ann_loc_x = 0;
-ann_loc_y = 0;
+ann_loc_y = -case_size[1]/4;
 ann_loc_z = case_size[2] - material/2;
 ann_rot = [0, 0, 0];
 
@@ -244,7 +255,8 @@ module base(print=false) {
         // }
         translate([speaker_loc_x, -speaker_loc_y]) {
             rotate([0, 0, 90])
-            cutter_square(x=speaker_dim[0], y=speaker_dim[1]);
+            // cutter_square(x=speaker_dim[0], y=speaker_dim[1]);
+            cutter_circle(d=cone_dia*.9);
         }
         if(print) {
             translate([-case_size[0]/2 + material*1.5, -case_size[1]/2 + 8 + material * 1.5]){
@@ -299,7 +311,7 @@ module left() {
 
 
  module back() {
-    text_size = 8;
+    text_size = 10;
     valign = "center";
     halign = "center";
 
@@ -316,13 +328,13 @@ module left() {
                 arcade_button_cutter(body_d=set_body_d);
             }
     
-            translate([pb_loc_x, pb_loc_z - set_flange_d/2 - text_size/2]) {
+            translate([pb_loc_x, pb_loc_z - set_flange_d/2 - text_size/1.5]) {
                 text(text="+", font=font, 
                         size=text_size,
                         valign=valign,
                         halign=halign);
             }
-            translate([mb_loc_x, mb_loc_z - set_flange_d/2 - text_size/2]) {
+            translate([mb_loc_x, mb_loc_z - set_flange_d/2 - text_size/1.5]) {
                 text(text="–", font=font, 
                         size=text_size,
                         valign=valign,
@@ -342,7 +354,9 @@ module left() {
  module top() {
     difference() {
         faceB(size=case_size, finger=finger, lidFinger=finger, material=material);
-        arcade_button_cutter(ann_body_d);
+        translate([ann_loc_x, ann_loc_y]) {
+            arcade_button_cutter(ann_body_d);
+        }
         for (i = [-1, 1]) {
             translate([i*catch_bolt_loc_x, 0]) {
                 rotate(catch_rot){
@@ -415,10 +429,12 @@ module left() {
         }
     }
     
-    
+
     translate([speaker_loc_x, speaker_loc_y, speaker_loc_z]) {
         rotate(speaker_rot) {
-            box_speaker(dim=speaker_dim, ears=ears, od=ear_od, h=ear_h);
+            // box_speaker(dim=speaker_dim, ears=ears, od=ear_od, h=ear_h);
+            cone_speaker(dia=cone_dia, magnetDia=cone_magnet_dia, height=cone_height);
+
         }
     }
 
