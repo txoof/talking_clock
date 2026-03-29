@@ -21,8 +21,8 @@ This clock is designed to be built out of market components, and tell the time i
 ## Audio Quality
 
 Adjust audio to default to one of the following:
-- 1000Hz All
-- 700Hz, 2400
+- Variant 7/12: 500hz_t16000
+- Variant 8/12: 500hz_t24000
 
 ## UX / Audio
 
