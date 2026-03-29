@@ -1,8 +1,8 @@
 eps = 0.0001;
 
-module arcadeSwitch(body_z=29.5,
+module arcade_button(body_z=29.5,
                     body_d=30,
-                    button_z=3,
+                    button_z=3.5,
                     flange_z=3,
                     flange_d=33.3,
                     button_d=24,
@@ -10,6 +10,14 @@ module arcadeSwitch(body_z=29.5,
                     contact_z=9.5,
                     $fn=36) {
   
+  // body_z: total body height including plunger (excluding contact terminals)
+  // body_d: body diameter - through-panel diameter
+  // button_z: z-height over flange
+  // button_z: z_height over panel
+  // button_d: diameter of button
+  // contact_x: width of contact
+  // contact_z: depth of terminal below body
+
   displacement_z = -body_z+flange_z+button_z;
   lower_z = body_z-flange_z-button_z;
 
@@ -31,7 +39,7 @@ module arcadeSwitch(body_z=29.5,
   echo("Body Height:", body_z, "Total Height:", body_z+contact_z, "Internal Clearance:", body_z+contact_z-button_z-flange_z);
 }
 
-module arcadeSwitchCutter(body_d=30, $fn=128) {
+module arcade_button_cutter(body_d=30, $fn=128) {
   circle(d=body_d);
 }
 
