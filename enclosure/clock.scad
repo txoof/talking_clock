@@ -184,6 +184,14 @@ catch_bolt_loc_x = catch_loc_x - (nut_plate_width(fastener_d=catch_fastener_d, c
 // epsilon to protect against div by zero
 eps = 0.0001;
 
+module multiline_text(lines, size=5, line_spacing=1.2, font="Helvetica") {
+    color("white")
+    for (i = [0 : len(lines) - 1]) {
+        translate([0, -i * size * line_spacing]) {
+            text(lines[i], size=size, halign="left", valign="baseline");
+        }
+    }
+}
 module mount_plate(dim=[5, 10, material], r=.5, color="red" ) {
     color(color) {
             chamfer_square(dim=dim, r=r, center=true);
@@ -228,8 +236,7 @@ module feet() {
 }
 
 
-
-module base() {
+module base(print=false) {
     difference() {
         faceB(size=case_size, finger=finger, lidFinger=finger, material=material, 0);
         // translate([-usb_finger_patch_loc_x, -(case_size[1]/2-material/2)]) {
@@ -239,13 +246,15 @@ module base() {
             rotate([0, 0, 90])
             cutter_square(x=speaker_dim[0], y=speaker_dim[1]);
         }
+        if(print) {
+            translate([-case_size[0]/2 + material*1.5, -case_size[1]/2 + 8 + material * 1.5]){
+                multiline_text(["Talking Clock", "github.com/txoof/talking_clock"], size=4);
+            }
+        }
     }
+
+ 
 }
-
-// !base();
-
-
-
 
 module left() {
     sd_card_cutout = [sd_card_clearance, sd_y + material/2];
