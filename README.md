@@ -18,6 +18,12 @@ This clock is designed to be built out of market components, and tell the time i
 - [x] Print menu levels to serial terminal for debugging
 - [x] Implement new rules on clock to use updated voice model vocabulary and rules
 
+## Audio Quality
+
+Adjust audio to default to one of the following:
+- 1000Hz All
+- 700Hz, 2400
+
 ## UX / Audio
 
 - [x] When setting the alarm, AM and PM (or equivalent) must be used in all cases
