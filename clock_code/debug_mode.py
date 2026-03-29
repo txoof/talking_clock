@@ -75,6 +75,9 @@ def _scan_files(variant_path):
     return files
 
 
+DEBUG_VOLUME = 0.7  # conservative level to avoid overdriving the amp
+
+
 def run_debug_mode(mixer):
     """Run the speaker test loop.
 
@@ -82,6 +85,8 @@ def run_debug_mode(mixer):
         mixer: Initialised audiomixer.Mixer with at least one voice.
     """
     print("DEBUG MODE")
+    mixer.voice[0].level = DEBUG_VOLUME
+    print(f"Volume: {DEBUG_VOLUME}")
 
     variants = _scan_variants()
     if not variants:
