@@ -9,11 +9,11 @@ use<./scad_libraries/cone_speaker.scad>
 
 /* [Rendering Setup] */
 
-three_d = 1;
+three_d = 0;
 
 /* [Enclosure Dimensions] */
 // Average material thickness (mm)
-material = 4.0;
+material = 3.5;
 // Finger Joint Width in (mm)
 finger = 5;
 
@@ -74,6 +74,8 @@ sd_card_clearance = 4.5;
 pico_x = 51.5;
 // Pico Y Dimensions
 pico_y = 21; 
+// Pico Z Dimensions (board)
+pico_z = 2;
 
 
 /* [Settings Buttons] */
@@ -111,7 +113,7 @@ foot_ratio = .8;
 
 // USB port location from center X 
 usb_port_loc_x = -case_size[0]/2 + usb_port_x/2 + material + 8;
-usb_port_loc_z = -case_size[2]/2 + usb_port_z/2 + material *2;
+usb_port_loc_z = -case_size[2]/2 + usb_port_z/2 + material *2 + pico_z;
 // patch the gap in the fingers under the USB port from the edge
 usb_finger_patch_x = ceil(abs(usb_port_loc_x/2)/finger) * 5; 
 // location of the patch starting with first negative cut
@@ -161,7 +163,7 @@ max_plate = [max_x+material/2, max_y+material/2, material];
 // plus and minus set button locations
 pb_loc_x = -(case_size[0]/2 - material*2 - set_flange_d/2) +material;
 pb_loc_y = case_size[1]/2;
-pb_loc_z = case_size[2]/2 - material*2 -set_flange_d/2;
+pb_loc_z = case_size[2]/2 - material*2 -set_flange_d/2.5;
 pb_rot = [-90, 0, 0];
 
 // mb_loc_x = -(case_size[0]/2 - material*2 - set_flange_d*1.75);
@@ -189,7 +191,7 @@ catch_n_fingers = 3;
 catch_n_fasteners = 2;
 catch_fastener_d = 3;
 catch_hole_d = 3.2;
-catch_finger_clearance = .1;
+catch_finger_clearance = 0;
 catch_bolt_loc_x = catch_loc_x - (nut_plate_width(fastener_d=catch_fastener_d, clearance=.1))/2;
 
 // epsilon to protect against div by zero
@@ -328,13 +330,13 @@ module left() {
                 arcade_button_cutter(body_d=set_body_d);
             }
     
-            translate([pb_loc_x, pb_loc_z - set_flange_d/2 - text_size/1.5]) {
+            translate([pb_loc_x, pb_loc_z - set_flange_d/2.5 - text_size/1.5]) {
                 text(text="+", font=font, 
                         size=text_size,
                         valign=valign,
                         halign=halign);
             }
-            translate([mb_loc_x, mb_loc_z - set_flange_d/2 - text_size/1.5]) {
+            translate([mb_loc_x, mb_loc_z - set_flange_d/2.5 - text_size/1.5]) {
                 text(text="–", font=font, 
                         size=text_size,
                         valign=valign,
@@ -497,7 +499,10 @@ module left() {
 
 
     // setting button (plus)
-    translate([-pb_loc_x, pb_loc_y, case_size[2]/2 + material*2]) {
+    // pb_loc_z = case_size[2]/2 - material*2 -set_flange_d/2.5;
+    sb_loc_z_render = case_size[2]/2 + set_flange_d/2.5 + material;
+    // case_size[2]/2 + material*2
+    translate([-pb_loc_x, pb_loc_y, sb_loc_z_render]) {
         color("red") {
             rotate(pb_rot) {
                 arcade_button(body_z=set_body_z,
@@ -514,7 +519,7 @@ module left() {
     }
 
     // setting button (minus)
-    translate([-mb_loc_x, mb_loc_y, case_size[2]/2 + material*2]) {
+    translate([-mb_loc_x, mb_loc_y, sb_loc_z_render]) {
         color("darkgray") {
             rotate(pb_rot) {
                 arcade_button(body_z=set_body_z,
@@ -595,6 +600,13 @@ module left() {
         rotate([0, 0, 90])
         mount_plate(pico_plate);
     
+    // MAX mounting plate
+    color("gray") 
+        translate([-case_size[0]/2 - pico_plate[1] - max_plate[0]/2 - material *2, 
+                  case_size[1] + sd_card_plate[0] + max_plate[1] + 2 * material])
+        rotate([0, 0, 0])
+        mount_plate(max_plate);
+
     nut_plate_x = case_size[0]/2 + nut_plate_width(fastener_d=catch_fastener_d)*3;
     nut_plate_y = case_size[1] + material;
     for (i = [0, 1]) {
