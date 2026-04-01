@@ -157,3 +157,26 @@ module box_speaker(dim=[50, 45, 22], ears=true, od=8, h=4) {
         }
     }
 }
+
+module dupont_bus_bar(dim=[35, 5, 2], col=9) {
+    pin_thick=.64;
+    pin_len = 6;
+    color("orange") {
+        cube(dim, center=true);
+    }
+    for (i=[-1, 1]) {
+        translate([0, i*(dim[1]/2 - pin_thick), pin_len/2]) {
+            rotate([0, 90, 90])
+            dupont_pins(count=col);
+        }
+    }
+
+    color("white") {
+        translate([0, 0, 2 / 2]) {
+            linear_extrude(height=0.4) {
+                text("Bus Bar", size=3, halign="center", valign="center");
+            }
+        }
+    } 
+
+}

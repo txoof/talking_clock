@@ -9,7 +9,7 @@ use<./scad_libraries/cone_speaker.scad>
 
 /* [Rendering Setup] */
 
-three_d = 0;
+three_d = 1;
 
 /* [Enclosure Dimensions] */
 // Average material thickness (mm)
@@ -68,6 +68,12 @@ sd_x = 42;
 sd_y = 24; 
 sd_z = 2;
 sd_card_clearance = 4.5;
+
+/* [Bus Bar] */
+bus_bar_x = 35;
+bus_bar_y = 10;
+bus_bar_z = 2;
+bus_bar_pin_col = 9;
 
 /* [Pi Pico] */
 // Pico X Dimensions
@@ -569,6 +575,27 @@ module left() {
             }
         }
     }
+
+    bus_bar_rot = [0, 0, 90];
+    bus_bar_x_loc = pico_x_loc - pico_y/2 - bus_bar_y/2 - material;
+    bus_bar_y_loc = 0;
+    bus_bar_z_loc = material/2 + material;
+    bus_bar_plate = [bus_bar_x + material/2, bus_bar_y + material/2, material];
+
+    translate([bus_bar_x_loc, bus_bar_y_loc, bus_bar_z_loc]) {
+        rotate(bus_bar_rot) {
+            dupont_bus_bar(dim=[bus_bar_x, bus_bar_y, bus_bar_z], bus_bar_pin_col);
+        }
+    }
+
+    translate([bus_bar_x_loc, bus_bar_y_loc, bus_bar_z_loc - material]) {
+        rotate(bus_bar_rot) {
+           linear_extrude(height=material) {
+                mount_plate(bus_bar_plate);
+            }
+        }  
+    }
+
 
 
 
