@@ -1,9 +1,3 @@
-# Talking Clock
-
-Accessible clock that announces the time on demand by a button push, or periodically.
-
-This clock is designed to be built out of market components, and tell the time in any language for which there is a Piper TTS model. 
-
 # Talking Clock - To Do
 
 ## Bugs
@@ -110,6 +104,19 @@ Expected output:
 ```
 sample_rate=22050|channels=1|sample_fmt=s16
 ```
+
+# Talking Clock
+
+Accessible clock that announces the time on demand by a button push, or periodically every quarter hour, half hour or on the hour.
+
+This clock is designed to be built out of market components, and tell the time in any language for which there is a Piper TTS model.
+
+## Localization
+
+The clock can be localized to any language by creating a YAML file that describes the rules and phrases for telling time in your language. Once the YAML file is created, WAV files can be generated using Piper TTS models and transferred to the clock via SD card.
+
+For detailed localization instructions, see the [Localization Readme](./talking-clock-audio/README.md).
+
 
 ## Bill of Materials
 
