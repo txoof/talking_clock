@@ -2,7 +2,7 @@
 
 Generate multilingual time phrase audio files for accessible talking clock applications.
 
-This package provides tools for creating audio files from text phrases using Piper TTS voices in multiple languages. Designed specifically for creating accessible talking clock applications with clear, natural-sounding time announcements.
+This package provides tools for creating audio files from text phrases using Piper TTS voices in multiple languages. This is designed specifically for creating accessible talking clock applications with clear, natural-sounding time announcements that match the common style and format for your language.
 
 ## Features
 
@@ -61,6 +61,19 @@ tca generate \
 ```
 
 Output will be created in: `audio/en_US_lessac_medium_casual/`
+
+### Adding New Languages
+
+See [ADDING_LANGUAGES.md](ADDING_LANGUAGES.md) for comprehensive guide on creating new language configurations.
+
+Quick summary:
+
+1. Create YAML file in `time_formats/time_phrases_{locale}.yaml`
+2. Define vocabulary (words and number_words)
+3. Define computed fields for hour/minute transformations
+4. Define rules for each speaking mode
+5. Validate with `tca validate`
+6. Generate audio with `tca generate`
 
 ## CLI Commands
 
@@ -223,121 +236,6 @@ audio/
   "number_words.11": "number_eleven.wav"
 }
 ```
-
-The vocabulary mapping is compact and loaded once at startup. Your Pico code uses the phrase generation logic to determine which vocab entries are needed for any given time, then looks them up in vocab.json to get the filenames.
-
-## Using on Raspberry Pi Pico
-
-Copy the generated package directory to your Pico's SD card.
-
-**Your Pico code needs to:**
-
-1. Load the YAML rules (you'll port the phrase_generator logic to CircuitPython)
-2. Load vocab.json to map vocab keys to filenames
-3. Evaluate rules for current time to get token list
-4. Look up filenames in vocab.json
-5. Play audio files in sequence
-
-**Example approach:**
-
-```python
-import json
-
-# Load vocab mapping once at startup
-with open('/sd/audio/en_US_lessac_medium_casual/vocab.json', 'r') as f:
-    vocab = json.load(f)
-
-# In your main loop when button pressed:
-hour = rtc.hour
-minute = rtc.minute
-
-# Your ported phrase generation logic determines tokens
-# (This is the rule evaluation from phrase_generator.py)
-tokens = generate_tokens_for_time(hour, minute)  # You implement this
-
-# Look up filenames
-for token in tokens:
-    filename = vocab[token]
-    play_wav(f'/sd/audio/en_US_lessac_medium_casual/audio/{filename}')
-```
-
-You'll need to port the rule evaluation logic from phrase_generator.py to CircuitPython. The advantage of the new structure is that vocab.json is small (a few KB) and can stay in RAM, while the YAML rules can be embedded in your Pico code or stored separately.
-
-## Small Speaker Compatibility
-
-Piper TTS generates audio at full dynamic range, which can cause distortion on small speakers (40mm or smaller, 3W or less). The built-in audio processing features solve this:
-
-1. **High-pass filter**: Removes low-frequency content that small speakers cannot reproduce cleanly
-2. **Soft limiter**: Gently compresses loud peaks while leaving quiet speech unchanged
-
-Both are enabled by default with settings optimized for small 4-ohm speakers.
-
-### High-Pass Filter
-
-Small speakers struggle to reproduce low frequencies (below 200-400Hz). When they try, the cone excursion becomes excessive, causing distortion and reducing clarity. The high-pass filter attenuates these frequencies, resulting in clearer speech.
-
-**Default:** 300Hz cutoff (enabled)
-
-**Custom cutoff:**
-
-```bash
-# More aggressive filtering (for very small speakers)
-tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 500
-
-# Mild filtering (for medium speakers)
-tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 200
-
-# Disable filtering (for full-range speakers)
-tca generate --yaml <file> --mode casual --model <path> --highpass-cutoff 0
-```
-
-### Soft Limiter
-
-**Default:** threshold=16000, optimized for small 4-ohm speakers.
-
-**Custom threshold:**
-
-```bash
-# Mild compression (for better speakers)
-tca generate --yaml <file> --mode casual --model <path> --speaker-threshold 24000
-
-# Aggressive compression (for very small speakers)
-tca generate --yaml <file> --mode casual --model <path> --speaker-threshold 8000
-
-# Disable limiter (for high-quality speakers or headphones)
-tca generate --yaml <file> --mode casual --model <path> --speaker-threshold 32767
-```
-
-**How to test:**
-
-Generate packages at different thresholds and listen on your target hardware:
-
-```bash
-tca generate --yaml time_formats/time_phrases_en_US.yaml --mode casual \
-  --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
-  --speaker-threshold 16000 --output-dir audio/test_16000
-
-tca generate --yaml time_formats/time_phrases_en_US.yaml --mode casual \
-  --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
-  --speaker-threshold 24000 --output-dir audio/test_24000
-```
-
-Listen for buzzing, crackling, or distortion on vowels and voiced consonants. Adjust threshold until distortion disappears without sounding muffled.
-
-See the README section "Small Speaker Compatibility" in ADDING_LANGUAGES.md for detailed technical information.
-
-## Adding New Languages
-
-See [ADDING_LANGUAGES.md](ADDING_LANGUAGES.md) for comprehensive guide on creating new language configurations.
-
-Quick summary:
-
-1. Create YAML file in `time_formats/time_phrases_{locale}.yaml`
-2. Define vocabulary (words and number_words)
-3. Define computed fields for hour/minute transformations
-4. Define rules for each speaking mode
-5. Validate with `tca validate`
-6. Generate audio with `tca generate`
 
 ## Supported Languages
 
