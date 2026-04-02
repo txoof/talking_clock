@@ -1,11 +1,11 @@
 // Simple speaker driver
 // Usage: speaker(); or speaker(dia=50, height=20);
 
-module speaker(dia=40, height=18) {
+module cone_speaker(dia=40, magnetDia=20, height=18) {
     $fn = 64;
     
     // Dimensions
-    magnetDia = dia * 0.75;
+    // magnetDia = dia * 0.75;
     magnetHeight = height * 0.5;
     
     coneDia = dia * 0.9;

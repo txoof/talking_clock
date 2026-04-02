@@ -32,7 +32,7 @@ customMaterial=3; //[0.1:0.05:10]
 // layout 2D or 3D style - THINGIVERSE CANNOT OUTPUT 2D STLS!
 customLayout2D = 1; // [0:3D layout for visualization, 1:2D layout for DXF output]
 
-/* [Hidden] */
+// /* [Hidden] */
 // assign the variable for the demo module
 /*
 tSize=[customX, customY, customZ];
@@ -102,8 +102,8 @@ module outsideCuts(length, finger, cutD, div) {
 
 
 module faceA(size, finger, lidFinger, material, dividers=0) {
-  echo("Rendering faceA (X, Z faces)" );
-  echo("using size:[0]: ", size[0]," size[2]: ", size[2]);
+  // echo("Rendering faceA (X, Z faces)" );
+  // echo("using size:[0]: ", size[0]," size[2]: ", size[2]);
   maxDivs = maxDiv(size, finger);
   uDiv = usableDiv(maxDivs);
   uDivLid = usableDiv(maxDiv(size, lidFinger));
@@ -147,8 +147,8 @@ module faceA(size, finger, lidFinger, material, dividers=0) {
 
 
 module faceB(size, finger, lidFinger, material, dividers=0, lid=false) {
-  echo("Rendering faceB (X, Y Faces)");
-  echo("using size:[0]: ", size[0]," size[1]: ", size[1]);
+  // echo("Rendering faceB (X, Y Faces)");
+  // echo("using size:[0]: ", size[0]," size[1]: ", size[1]);
   //lid and base
   maxDivs = lid==true ? maxDiv(size, lidFinger) : maxDiv(size, finger);
   uDiv = usableDiv(maxDivs);
@@ -195,8 +195,8 @@ module faceB(size, finger, lidFinger, material, dividers=0, lid=false) {
 
 
 module faceC(size, finger, lidFinger, material) {
-  echo("Rendering faceB (Y, Z Faces)");
-  echo("using size:[1]: ", size[1]," size[2]: ", size[2]);
+  // echo("Rendering faceB (Y, Z Faces)");
+  // echo("using size:[1]: ", size[1]," size[2]: ", size[2]);
   maxDivs = maxDiv(size, finger);
   uDiv = usableDiv(maxDivs);
   uDivLid = usableDiv(maxDiv(size, lidFinger));
@@ -259,10 +259,10 @@ module divider(size, finger, material, lid=true) {
 
 }
 
-module layout(size, material, 2D=true, alpha=0.5, dividers=0, v=true) {
+module layout(size, material, twoD=true, alpha=0.5, dividers=0, v=false) {
 
   if (v) {
-    echo("parameters:"); echo("material (thickness of material)");
+    echo("parameters:"); // echo("material (thickness of material)");
     echo("size ([X, Y, Z] - dimensions of box)");
     echo("2D (boolean - childrender in 2D or 3D)");
     echo("alpha (real between 0, 1 - transparency of 3D model)");
@@ -272,7 +272,7 @@ module layout(size, material, 2D=true, alpha=0.5, dividers=0, v=true) {
     echo("layout2D() { faceA(-XZ red); faceA(+XZ darkred); faceB(-XY lime); faceB(+XY green); faceC(-YZ blue); faceC(+YZ darkblue);}");
   }
 
-  if(2D) {
+  if(twoD) {
     //separation of pieces for 2D layout
     separation = 1.5;
     //calculate the most efficient layout for 2D layout
@@ -393,7 +393,7 @@ myLid = customLid;
 myLayout = customLayout2D; 
 //myLayout = false;
 
-layout(size=myS, material=myMat, 2D=myLayout, dividers=myDiv) {
+layout(size=myS, material=myMat,twoD=myLayout, dividers=myDiv) {
   faceA(myS, myF, myLF, myMat, myDiv);
   faceA(myS, myF, myLF, myMat, dividers=myDiv);
   faceB(myS, myF, myLF, myMat, dividers=myDiv, lid=false);

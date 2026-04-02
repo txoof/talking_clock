@@ -1,64 +1,46 @@
-module arcadeSwitch() { 
-    $fn = 64;
+eps = 0.0001;
 
-    // Dimensions
-    // Total switch height: 41.9
-    // Internal clearance required: 35.5
-    buttonDia = 25;
-    flangeDia = 33.2;
-    flangeHeight = 3;
-    buttonHeight = 3.4 + flangeHeight;
-    nutZ = 11;
-    nutDia = 36;
+module arcade_button(body_z=29.5,
+                    body_d=30,
+                    button_z=3.5,
+                    flange_z=3,
+                    flange_d=33.3,
+                    button_d=24,
+                    contact_x=3,
+                    contact_z=9.5,
+                    $fn=36) {
+  
+  // body_z: total body height including plunger (excluding contact terminals)
+  // body_d: body diameter - through-panel diameter
+  // button_z: z-height over flange
+  // button_z: z_height over panel
+  // button_d: diameter of button
+  // contact_x: width of contact
+  // contact_z: depth of terminal below body
 
-    threadDia = 29.5;
-    threadLength = 17;
-
-    contactWidth = 4.8;
-    contactThickness = 0.5;
-    contactHeight = 10;
-    contactSpacing = 8;
-
-
-    bodyDia = threadDia / 2;
-    totalBodyHeight = 18.5;
-    bodyHeight = totalBodyHeight - contactHeight;
-
+  displacement_z = -body_z+flange_z+button_z;
+  lower_z = body_z-flange_z-button_z;
 
   color("Gold")
   union() {
-    // Button (extends above flange)
-    cylinder(h=buttonHeight, d=buttonDia);
-    
-    // Flange
-    cylinder(h=flangeHeight, d=flangeDia);
-
-    // Thread
-    translate([0, 0, -threadLength])
-    cylinder(h=threadLength, d=threadDia);
-        
-    // Body
-    translate([0, 0, -(threadLength + bodyHeight)])
-    cylinder(h=bodyHeight, d=bodyDia);
-    // translate([0, 0, flangeTopZ - flangeHeight - bodyHeight - threadLength])
-    //   cylinder(d=threadDia, h=threadLength, $fn=36);
-    
-    // Contacts (two blade connectors)
-    // baseZ = flangeTopZ - flangeHeight - bodyHeight - threadLength;
-    // translate([-contactSpacing/2, -contactThickness/2, baseZ - contactHeight])
-    translate([-contactWidth/2, contactSpacing/2, -(threadLength + bodyHeight + contactHeight)])
-      cube([contactWidth, contactThickness, contactHeight]);
-    
-    translate([-contactWidth/2, -contactSpacing/2, -(threadLength + bodyHeight + contactHeight)])
-      cube([contactWidth, contactThickness, contactHeight]);
+    translate([0, 0, displacement_z]) {
+      cylinder(body_z, d=button_d);
+    }
+    translate([0, 0, -lower_z]) {
+      cylinder(h=lower_z, d=body_d);
+    }
+    cylinder(h=flange_z, d=flange_d);
+    for (i = [-1, 1]) {
+      translate([0, i*contact_x*1.5, displacement_z-contact_z+eps]) {
+        cube([contact_x, .5, contact_z], center=false);
+      }
+    }
   }
+  echo("Body Height:", body_z, "Total Height:", body_z+contact_z, "Internal Clearance:", body_z+contact_z-button_z-flange_z);
 }
 
-module arcadeSwitchCutter() {
-    $fn = 128;
-    threadDia = 29.5;
-    overage = 0.5;
-    circle(d=threadDia + overage);
+module arcade_button_cutter(body_d=30, $fn=128) {
+  circle(d=body_d);
 }
 
 // arcadeSwitch();
