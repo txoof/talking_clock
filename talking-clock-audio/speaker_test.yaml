@@ -1,0 +1,80 @@
+# speaker_test.yaml
+# Speaker test audio configuration for tca debug
+#
+# Sentences target specific problem phonemes in clock speech:
+#   A: voiced fricative onset + diphthong (three, thirty, thirteen)
+#   B: EIG diphthong (eight, eighteen)
+#   C: representative clock output, easier phonemes, volume reference
+#   D: isolated diphthong + final fricative stress test
+#
+# Variants cover a grid of highpass cutoff x soft limiter threshold.
+# Higher cutoffs (700-1200Hz) suit small cones with limited low-frequency
+# response. Higher thresholds (24000) suit 8-ohm speakers which draw less
+# power from the MAX98357A. No-limiter variants isolate the filter effect.
+
+sentences:
+  - "Three, thirteen, thirty, three thirty"
+  - "Eight, eighteen, eighty eight"
+  - "It is half past seven in the evening"
+  - "South, mouth, fourth, fifth"
+
+variants:
+  - name: no_processing
+    highpass_cutoff: null
+    speaker_threshold: null
+    label: "no filter, no limiter"
+
+  - name: no_filter_t24000
+    highpass_cutoff: null
+    speaker_threshold: 24000
+    label: "no filter, threshold twenty four thousand"
+
+  - name: 300hz_no_limiter
+    highpass_cutoff: 300
+    speaker_threshold: null
+    label: "three hundred hertz, no limiter"
+
+  - name: 300hz_t16000
+    highpass_cutoff: 300
+    speaker_threshold: 16000
+    label: "three hundred hertz, threshold sixteen thousand"
+
+  - name: 300hz_t24000
+    highpass_cutoff: 300
+    speaker_threshold: 24000
+    label: "three hundred hertz, threshold twenty four thousand"
+
+  - name: 500hz_t16000
+    highpass_cutoff: 500
+    speaker_threshold: 16000
+    label: "five hundred hertz, threshold sixteen thousand"
+
+  - name: 500hz_t24000
+    highpass_cutoff: 500
+    speaker_threshold: 24000
+    label: "five hundred hertz, threshold twenty four thousand"
+
+  - name: 700hz_no_limiter
+    highpass_cutoff: 700
+    speaker_threshold: null
+    label: "seven hundred hertz, no limiter"
+
+  - name: 700hz_t24000
+    highpass_cutoff: 700
+    speaker_threshold: 24000
+    label: "seven hundred hertz, threshold twenty four thousand"
+
+  - name: 1000hz_no_limiter
+    highpass_cutoff: 1000
+    speaker_threshold: null
+    label: "one thousand hertz, no limiter"
+
+  - name: 1000hz_t24000
+    highpass_cutoff: 1000
+    speaker_threshold: 24000
+    label: "one thousand hertz, threshold twenty four thousand"
+
+  - name: 1200hz_t24000
+    highpass_cutoff: 1200
+    speaker_threshold: 24000
+    label: "one thousand two hundred hertz, threshold twenty four thousand"

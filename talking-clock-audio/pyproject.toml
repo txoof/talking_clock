@@ -17,6 +17,10 @@ authors = [
 
 dependencies = [
     "huggingface-hub>=0.20.0",
+    "pyyaml>=6.0",
+    "click>=8.0",
+    "questionary>=2.0",
+    "pycountry>=23.0",
 ]
 
 [project.optional-dependencies]
