@@ -11,7 +11,7 @@ module dupont_pins(count=4, pin_pitch=2.54, pin_thick=0.64, pin_len=6) {
 module max_amp(dim, terminal_h) {
     pin_thick = 0.64;
     pin_len = 6;
-    color("yellow") {
+    color("mediumslateblue") {
         cube(dim, center=true);
     }
     
@@ -106,7 +106,7 @@ module pi_pico() {
     pin_thick = .64;
     pin_len = 6; 
 
-    color("Yellow") {
+    color("darkseagreen") {
         cube([pico_x, pico_y, 2], center=true);
     }
 

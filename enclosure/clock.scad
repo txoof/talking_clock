@@ -10,6 +10,7 @@ use<./scad_libraries/cone_speaker.scad>
 /* [Rendering Setup] */
 
 three_d = 1;
+alpha = 0.2;
 
 /* [Enclosure Dimensions] */
 // Average material thickness (mm)
@@ -407,7 +408,7 @@ module left() {
         children(2);
       }
 
-    // // Front 3
+    // Front 3
     // color(colors[3]) 
     //   translate([0, -case_size[1]/2+material/2, case_size[2]/2-material/2])
     //   rotate([90, 0, 0])
@@ -423,11 +424,11 @@ module left() {
             }
     
     // Lid 5
-    color(colors[5])
-        translate([0, 0, case_size[2]-material]) {
-            linear_extrude(height=material, center=true)
-            children(5);
-        }
+    // color(colors[5])
+    //     translate([0, 0, case_size[2]-material]) {
+    //         linear_extrude(height=material, center=true)
+    //         children(5);
+    //     }
   
 
 
