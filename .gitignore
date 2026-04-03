@@ -1,3 +1,8 @@
+**/debug/
+**/libArchive/
+**/stubArchive/
+**/sd_mock
+
 # vscode
 .vscode/*
 
