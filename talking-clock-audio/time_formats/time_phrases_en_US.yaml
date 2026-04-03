@@ -20,6 +20,35 @@ vocab:
     noon: "noon"
     almost: "almost"
 
+  menu:
+    enter: "settings"
+    exit: "done"
+    set_time: "set time"
+    set_alarm: "set alarm"
+    alarm_enabled: "enable alarm"
+    alarm_tone: "alarm tone"
+    voice: "voice"
+    announce_interval: "announcement interval"
+    mode: "time format"
+
+  toggle:
+    on: "on"
+    off: "off"
+
+  interval:
+    hourly: "every hour"
+    half: "every half hour"
+    quarter: "every quarter hour"
+
+  voice:
+    name: "U.S. English"
+
+  mode:
+    operational: "operational"
+    broadcast: "broadcast"
+    standard: "standard"
+    casual: "casual"
+
   number_words:
     0: "zero"
     1: "one"
