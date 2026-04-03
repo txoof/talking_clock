@@ -7,11 +7,12 @@ import click
 import questionary
 from pathlib import Path
 
-from .phrase_generator import load_time_phrases
-from .tts_generator import (generate_audio_package_with_tts,
-                             DEFAULT_SPEAKER_THRESHOLD,
-                             DEFAULT_HIGHPASS_CUTOFF)
-from .rules_generator import write_all_rules, generate_rules, load_yaml
+from .tts_generator import (
+    generate_audio_package_with_tts,
+    DEFAULT_SPEAKER_THRESHOLD,
+    DEFAULT_HIGHPASS_CUTOFF,
+)
+from .rules_generator import load_yaml, write_locale_package
 from .voice_manager import get_available_voices
 
 
@@ -502,7 +503,7 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
                 click.echo("Cancelled.")
                 return
 
-        config = load_time_phrases(yaml_path)
+        config = load_yaml(yaml_path)
         locale = config['locale']
         modes = list(config['modes'].keys())
 
@@ -578,10 +579,14 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
             highpass_cutoff=effective_cutoff
         )
 
-        click.echo("\nWriting rules files...")
-        rule_sizes = write_all_rules(config, output_dir)
-        for mode_name, size in rule_sizes.items():
-            click.echo(f"  {mode_name}_rules.json: {size} bytes")
+        click.echo("\nWriting locale package...")
+        package_sizes = write_locale_package(config, output_dir)
+
+        click.echo(f"  vocab.json: {package_sizes['vocab']} bytes")
+        for key, size in package_sizes.items():
+            if key == 'vocab':
+                continue
+            click.echo(f"  {key}_rules.json: {size} bytes")
 
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")

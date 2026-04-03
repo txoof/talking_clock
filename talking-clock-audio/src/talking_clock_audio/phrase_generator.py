@@ -1,458 +1,359 @@
-# src/talking_clock_audio/phrase_generator.py
-
-"""Phrase generation from time phrase YAML configurations.
-
-This module loads YAML configurations defining time phrases in various languages
-and modes, evaluates rules and computed fields, and generates token sequences
-representing the audio files needed to speak any given time.
-"""
-
-import re
-import yaml
+import json
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any
 
 
-def slugify(text: str) -> str:
-    """Convert text to a safe filename slug.
-    
-    Args:
-        text: Text to slugify.
-        
-    Returns:
-        Slugified text suitable for filename.
-        
+def load_vocab(vocab_path: str | Path) -> dict[str, str]:
+    """
+    Load a locale vocabulary file.
+
+    The vocabulary file maps symbolic token names to audio filenames.
+    Example token keys include:
+    - 'words.midnight'
+    - 'words.oclock'
+    - 'number_words.12'
+
+    Parameters
+    ----------
+    vocab_path : str | Path
+        Path to the JSON vocabulary file.
+
+    Returns
+    -------
+    dict[str, str]
+        A mapping from symbolic token keys to audio filenames.
+    """
+    with open(vocab_path, 'r', encoding='utf8') as file_handle:
+        return json.load(file_handle)
+
+
+def load_mode_rules(rules_path: str | Path) -> dict[str, Any]:
+    """
+    Load one compiled mode rules file.
+
+    A mode rules file contains the rules for one locale and one mode,
+    such as broadcast, standard, operational, or casual.
+
+    Parameters
+    ----------
+    rules_path : str | Path
+        Path to the JSON rules file.
+
+    Returns
+    -------
+    dict[str, Any]
+        The parsed JSON content for the selected rules file.
+    """
+    with open(rules_path, 'r', encoding='utf8') as file_handle:
+        return json.load(file_handle)
+
+
+def build_context(hour_24: int, minute: int, day_period: list[list[Any]] | None = None) -> dict[str, Any]:
+    """
+    Build the computed values needed to expand rule tokens.
+
+    The runtime only needs a very small set of derived values in order
+    to expand placeholders found in compiled rule tokens.
+
+    Supported computed values are:
+    - h24: the 24 hour value
+    - h12: the 12 hour value
+    - next_h12: the next 12 hour value
+    - m: the minute value
+    - m_to: minutes until the next hour
+    - period: a locale specific period such as 'am' or 'pm'
+
+    The day_period input is expected to be a list of pairs in the form:
+    [[threshold, value], [threshold, value], ...]
+
+    Example:
+    [[12, 'am'], [None, 'pm']]
+
+    This means:
+    - if hour_24 < 12, use 'am'
+    - otherwise use 'pm'
+
+    Parameters
+    ----------
+    hour_24 : int
+        Hour in 24 hour time, from 0 to 23.
+    minute : int
+        Minute value, from 0 to 59.
+    day_period : list[list[Any]] | None
+        Optional day period mapping rules.
+
+    Returns
+    -------
+    dict[str, Any]
+        A dictionary containing the computed context values.
+    """
+    h12 = ((hour_24 + 11) % 12) + 1
+    next_h12 = (h12 % 12) + 1
+    m_to = 60 - minute
+
+    period = None
+    if day_period:
+        for threshold, value in day_period:
+            if threshold is None or hour_24 < threshold:
+                period = value
+                break
+
+    return {
+        'h24': hour_24,
+        'h12': h12,
+        'next_h12': next_h12,
+        'm': minute,
+        'm_to': m_to,
+        'period': period,
+    }
+
+
+def token_to_vocab_key(token: str, context: dict[str, Any]) -> str:
+    """
+    Expand one token template into a concrete vocabulary key.
+
+    Tokens may contain placeholders such as:
+    - 'number_words.{h12}'
+    - 'number_words.{m}'
+    - 'number_words.{next_h12}'
+    - 'words.{period}'
+
+    If the token contains no placeholders, it is returned unchanged.
+
+    Parameters
+    ----------
+    token : str
+        A symbolic token or token template.
+    context : dict[str, Any]
+        Context values used to replace placeholders.
+
+    Returns
+    -------
+    str
+        The expanded vocabulary key.
+    """
+    if '{' not in token:
+        return token
+
+    result = token
+    for key, value in context.items():
+        result = result.replace(f'{{{key}}}', str(value))
+    return result
+
+
+def rule_matches(rule: dict[str, Any], hour_24: int, minute: int) -> bool:
+    """
+    Determine whether a compiled rule matches the provided time.
+
+    Supported rule conditions are:
+    - any
+    - hour_24_eq
+    - minute_eq
+    - minute_lt
+    - minute_gt
+    - minute_lte
+    - minute_gte
+
     Examples:
-        >>> slugify("o'clock")
-        'o_clock'
-        >>> slugify("twenty one")
-        'twenty_one'
+    {'when': {'minute_eq': 0}}
+    {'when': {'minute_gt': 0, 'minute_lt': 10}}
+    {'when': {'hour_24_eq': 12, 'minute_eq': 0}}
+    {'when': {'any': True}}
+
+    Parameters
+    ----------
+    rule : dict[str, Any]
+        One compiled rule dictionary.
+    hour_24 : int
+        Hour in 24 hour time, from 0 to 23.
+    minute : int
+        Minute value, from 0 to 59.
+
+    Returns
+    -------
+    bool
+        True if the rule matches, otherwise False.
     """
-    slug = text.lower()
-    
-    # Replace apostrophes with underscores (before removing them)
-    slug = slug.replace("'", '_')
-    
-    # Replace spaces with underscores
-    slug = slug.replace(' ', '_')
-    
-    # Remove quotes
-    slug = slug.replace('"', '')
-    
-    # Replace periods and other non-alphanumeric with underscores
-    slug = re.sub(r'[^a-z0-9_]', '_', slug)
-    
-    # Remove multiple consecutive underscores
-    slug = re.sub(r'_+', '_', slug)
-    
-    # Remove leading/trailing underscores
-    slug = slug.strip('_')
-    
-    return slug
+    when = rule.get('when', {})
 
+    if when.get('any') is True:
+        return True
 
-def load_time_phrases(yaml_path: Path | str) -> Dict[str, Any]:
-    """Load time phrases YAML file.
-    
-    Args:
-        yaml_path: Path to the YAML file.
-        
-    Returns:
-        Dict with the complete YAML structure.
-        
-    Raises:
-        FileNotFoundError: If YAML file doesn't exist.
-        yaml.YAMLError: If YAML is malformed.
-    """
-    yaml_path = Path(yaml_path)
-    with open(yaml_path, 'r') as f:
-        return yaml.safe_load(f)
+    if 'hour_24_eq' in when and hour_24 != when['hour_24_eq']:
+        return False
+    if 'minute_eq' in when and minute != when['minute_eq']:
+        return False
+    if 'minute_lt' in when and not (minute < when['minute_lt']):
+        return False
+    if 'minute_gt' in when and not (minute > when['minute_gt']):
+        return False
+    if 'minute_lte' in when and not (minute <= when['minute_lte']):
+        return False
+    if 'minute_gte' in when and not (minute >= when['minute_gte']):
+        return False
 
-
-def evaluate_condition(condition_key: str, condition_value: Any, 
-                       hour_24: int, minute: int) -> bool:
-    """Evaluate a single condition against the current time.
-    
-    Args:
-        condition_key: The condition type (e.g., 'minute_eq', 'hour_24_lt').
-        condition_value: The value to compare against.
-        hour_24: Current hour in 24h format (0-23).
-        minute: Current minute (0-59).
-    
-    Returns:
-        True if condition matches, False otherwise.
-        
-    Raises:
-        ValueError: If condition format is invalid.
-    """
-    if condition_key == 'any':
-        return condition_value is True
-    
-    parts = condition_key.split('_')
-    if len(parts) < 2:
-        raise ValueError(f"Invalid condition key: {condition_key}")
-    
-    op = parts[-1]
-    field = '_'.join(parts[:-1])
-    
-    if field == 'minute':
-        current_value = minute
-    elif field == 'hour_24':
-        current_value = hour_24
-    else:
-        raise ValueError(f"Unknown field in condition: {field}")
-    
-    if op == 'eq':
-        return current_value == condition_value
-    elif op == 'lt':
-        return current_value < condition_value
-    elif op == 'gt':
-        return current_value > condition_value
-    elif op == 'lte':
-        return current_value <= condition_value
-    elif op == 'gte':
-        return current_value >= condition_value
-    else:
-        raise ValueError(f"Unknown operator: {op}")
-
-
-def matches_rule(rule: Dict[str, Any], hour_24: int, minute: int) -> bool:
-    """Check if a rule matches the given time.
-    
-    Args:
-        rule: Dict with 'when' conditions and 'tokens'.
-        hour_24: Current hour in 24h format (0-23).
-        minute: Current minute (0-59).
-    
-    Returns:
-        True if all conditions match, False otherwise.
-    """
-    when_conditions = rule['when']
-    
-    for condition_key, condition_value in when_conditions.items():
-        if not evaluate_condition(condition_key, condition_value, hour_24, minute):
-            return False
-    
     return True
 
 
-def find_matching_rule(mode_config: Dict[str, Any], hour_24: int, 
-                       minute: int) -> Tuple[Optional[str], Optional[Dict]]:
-    """Find the first matching rule for a given time.
-    
-    Args:
-        mode_config: Dict with 'rule_order' and 'rules'.
-        hour_24: Current hour in 24h format (0-23).
-        minute: Current minute (0-59).
-    
-    Returns:
-        Tuple of (rule_name, rule_dict) or (None, None) if no match.
+def expand_tokens(tokens: list[str], context: dict[str, Any]) -> list[str]:
     """
-    rule_order = mode_config['rule_order']
-    rules = mode_config['rules']
-    
-    for rule_name in rule_order:
-        rule = rules[rule_name]
-        if matches_rule(rule, hour_24, minute):
-            return rule_name, rule
-    
-    return None, None
+    Expand a list of token templates into concrete vocabulary keys.
 
+    Parameters
+    ----------
+    tokens : list[str]
+        A list of symbolic token templates from a matched rule.
+    context : dict[str, Any]
+        Context values used to replace placeholders.
 
-def evaluate_computed_field(field_def: Any, hour_24: int, minute: int, 
-                            computed_values: Dict[str, Any]) -> Any:
-    """Evaluate a computed field definition.
-    
-    Args:
-        field_def: Field definition (string expression or dict with conditions).
-        hour_24: Current hour (0-23).
-        minute: Current minute (0-59).
-        computed_values: Dict of already computed values.
-        
-    Returns:
-        Computed value.
+    Returns
+    -------
+    list[str]
+        A list of expanded vocabulary keys.
     """
-    if isinstance(field_def, dict):
-        for condition, value in field_def.items():
-            if condition == 'otherwise':
-                continue
-            
-            if condition.startswith('when_'):
-                condition_str = condition[5:]
-                
-                if '_lt_' in condition_str:
-                    field, threshold = condition_str.split('_lt_')
-                    if field == 'hour_24' and hour_24 < int(threshold):
-                        return value
-                elif '_eq_' in condition_str:
-                    parts = condition_str.split('_eq_')
-                    if len(parts) == 2:
-                        field, expected = parts
-                        if field == 'hour_24' and hour_24 == int(expected):
-                            return value
-                    elif '_and_' in condition_str:
-                        if 'hour_24_eq_0_and_minute_eq_0' in condition_str:
-                            if hour_24 == 0 and minute == 0:
-                                return value
-        
-        if 'otherwise' in field_def:
-            return field_def['otherwise']
-    
-    if isinstance(field_def, str):
-        if '[' in field_def and ']' in field_def:
-            parts = field_def.split('[')
-            dict_name = parts[0]
-            key_expr = parts[1].rstrip(']')
-            
-            if key_expr in computed_values:
-                key = computed_values[key_expr]
-            elif key_expr == 'hour_24':
-                key = hour_24
-            elif key_expr == 'minute':
-                key = minute
-            else:
-                key = key_expr
-            
-            return f"{dict_name}[{key}]"
-        
-        expr = field_def.replace('mod', '%')
-        expr = expr.replace('hour_24', str(hour_24))
-        expr = expr.replace('minute', str(minute))
-        
-        for comp_key, comp_val in computed_values.items():
-            if comp_key in expr:
-                expr = expr.replace(comp_key, str(comp_val))
-        
-        try:
-            return eval(expr)
-        except:
-            return field_def
-    
-    return field_def
+    return [token_to_vocab_key(token, context) for token in tokens]
 
 
-def compute_all_fields(config: Dict[str, Any], hour_24: int, 
-                       minute: int) -> Dict[str, Any]:
-    """Compute all field values for a given time.
-    
-    Args:
-        config: Loaded YAML configuration.
-        hour_24: Current hour (0-23).
-        minute: Current minute (0-59).
-        
-    Returns:
-        Dict of computed field values.
+def get_mode_name(mode_rules: dict[str, Any]) -> str:
     """
-    computed_fields = config['fields']['computed']
-    computed_values = {}
-    
-    computed_values['hour_24'] = hour_24
-    computed_values['minute'] = minute
-    
-    max_iterations = 3
-    for iteration in range(max_iterations):
-        for field_name, field_def in computed_fields.items():
-            if field_name not in computed_values:
-                computed_values[field_name] = evaluate_computed_field(
-                    field_def, hour_24, minute, computed_values
-                )
-    
-    return computed_values
+    Extract the single mode name from a compiled rules file.
 
+    The expected structure is:
 
-def expand_token(token: str, computed_values: Dict[str, Any], 
-                 config: Dict[str, Any]) -> str:
-    """Expand a token template to actual vocab word reference.
-    
-    Args:
-        token: Token template (e.g., "{hour_12_word}" or "past").
-        computed_values: Dict of computed values.
-        config: Loaded YAML configuration.
-        
-    Returns:
-        Vocab key reference (e.g., "number_words.11").
+        {
+            'locale': 'en_US',
+            'modes': {
+                'standard': [...]
+            }
+        }
+
+    Parameters
+    ----------
+    mode_rules : dict[str, Any]
+        Parsed compiled rules data.
+
+    Returns
+    -------
+    str
+        The name of the contained mode.
+
+    Raises
+    ------
+    ValueError
+        If the rules file does not contain exactly one mode.
     """
-    if not token.startswith('{'):
-        return f"words.{token}"
-    
-    field_name = token.strip('{}')
-    
-    if field_name in computed_values:
-        value = computed_values[field_name]
-        
-        if isinstance(value, str) and '[' in value:
-            dict_name, key = value.replace(']', '').split('[')
-            return f"{dict_name}.{key}"
-        
-        if field_name.endswith('_word'):
-            return f"words.{value}"
-        
-        return f"words.{value}"
-    
-    return f"words.{field_name}"
+    modes = mode_rules.get('modes', {})
+    mode_names = list(modes.keys())
+
+    if len(mode_names) != 1:
+        raise ValueError('Expected exactly one mode in the rules file.')
+
+    return mode_names[0]
 
 
-def generate_phrase_tokens(config: Dict[str, Any], mode: str, 
-                           hour_24: int, minute: int) -> Optional[List[str]]:
-    """Generate phrase tokens for a given time and mode.
-    
-    Args:
-        config: Loaded YAML configuration.
-        mode: Mode name (e.g., 'casual', 'broadcast').
-        hour_24: Current hour (0-23).
-        minute: Current minute (0-59).
-        
-    Returns:
-        List of vocab keys (e.g., ["number_words.11", "words.thirty"])
-        or None if no matching rule found.
+def generate_phrase_tokens(mode_rules: dict[str, Any], hour_24: int, minute: int) -> list[str] | None:
     """
-    computed_values = compute_all_fields(config, hour_24, minute)
-    mode_config = config['modes'][mode]
-    rule_name, rule = find_matching_rule(mode_config, hour_24, minute)
-    
-    if not rule:
-        return None
-    
-    tokens = []
-    for token_template in rule['tokens']:
-        vocab_key = expand_token(token_template, computed_values, config)
-        tokens.append(vocab_key)
-    
-    return tokens
+    Generate expanded vocabulary keys for a given time and compiled rules file.
 
+    This function:
+    1. builds the runtime context
+    2. selects the single mode contained in the rules file
+    3. scans the rules in order
+    4. expands the matched rule's tokens
 
-def get_all_vocab_with_dedup(config: Dict[str, Any]) -> Tuple[Dict[str, str], Dict[str, str]]:
-    """Get all unique vocab entries with human-readable filenames.
-    
-    Deduplicates vocab entries using case-insensitive comparison while
-    preserving whitespace and punctuation as specified in the YAML.
-    
-    Processes all sections in the vocab dictionary (words, number_words,
-    menu, toggle, interval, etc.) dynamically.
-    
-    Args:
-        config: Loaded YAML configuration.
-        
-    Returns:
-        Tuple of (vocab_map, audio_files) where:
-        - vocab_map: Dict mapping vocab keys to audio filenames.
-        - audio_files: Dict mapping audio filenames to text content.
+    Parameters
+    ----------
+    mode_rules : dict[str, Any]
+        Parsed compiled rules data for one locale and one mode.
+    hour_24 : int
+        Hour in 24 hour time, from 0 to 23.
+    minute : int
+        Minute value, from 0 to 59.
+
+    Returns
+    -------
+    list[str] | None
+        A list of expanded vocabulary keys if a rule matches,
+        otherwise None.
     """
-    normalized_to_file = {}
-    vocab_to_file = {}
-    audio_files = {}
-    
-    # Process all vocab sections (words, number_words, menu, toggle, interval, etc.)
-    for section_name, section_content in config['vocab'].items():
-        # Determine prefix based on section name
-        if section_name == 'number_words':
-            prefix = 'number'
-        else:
-            prefix = 'word'
-        
-        for key, value in section_content.items():
-            if isinstance(value, list):
-                # Handle variants (only generate first variant)
-                for i, variant in enumerate(value):
-                    normalized = variant.lower()
-                    
-                    if normalized not in normalized_to_file:
-                        slug = slugify(variant)
-                        filename = f"{prefix}_{slug}.wav"
-                        normalized_to_file[normalized] = filename
-                        audio_files[filename] = variant
-                    
-                    vocab_key = f"{section_name}.{key}"
-                    vocab_to_file[vocab_key] = normalized_to_file[normalized]
-                    break  # Only process first variant
-            else:
-                normalized = value.lower()
-                
-                if normalized not in normalized_to_file:
-                    slug = slugify(value)
-                    filename = f"{prefix}_{slug}.wav"
-                    normalized_to_file[normalized] = filename
-                    audio_files[filename] = value
-                
-                vocab_key = f"{section_name}.{key}"
-                vocab_to_file[vocab_key] = normalized_to_file[normalized]
-    
-    return vocab_to_file, audio_files
+    day_period = mode_rules.get('day_period', [])
+    context = build_context(hour_24, minute, day_period)
+
+    mode_name = get_mode_name(mode_rules)
+    rules = mode_rules['modes'][mode_name]
+
+    for rule in rules:
+        if rule_matches(rule, hour_24, minute):
+            return expand_tokens(rule['tokens'], context)
+
+    return None
 
 
-def generate_audio_package(config: Dict[str, Any], mode: str, 
-                           output_dir: Path | str) -> Dict[str, Any]:
-    """Generate audio package with config JSON and placeholder audio files.
-    
-    Creates a directory structure with:
-    - config.json: Pico-compatible configuration with pre-computed rules
-    - audio/: Directory with empty .wav placeholder files
-    
-    Args:
-        config: Loaded YAML configuration.
-        mode: Mode name (e.g., 'casual', 'broadcast').
-        output_dir: Output directory path (will be created if doesn't exist).
-        
-    Returns:
-        Dict with statistics about generated package including:
-        - output_dir: Path to output directory
-        - config_file: Path to config.json
-        - audio_dir: Path to audio directory
-        - rules_count: Number of time rules generated
-        - audio_files_count: Number of unique audio files
-        - vocab_entries_count: Number of vocab entries
-        - audio_files: List of audio filenames
+def resolve_audio_files(vocab: dict[str, str], tokens: list[str]) -> list[str]:
     """
-    import json
-    
-    output_path = Path(output_dir)
-    audio_path = output_path / 'audio'
-    
-    # Create directories
-    output_path.mkdir(parents=True, exist_ok=True)
-    audio_path.mkdir(exist_ok=True)
-    
-    # Get vocab mapping
-    vocab_map, audio_files = get_all_vocab_with_dedup(config)
-    
-    # Generate rules for all 1440 time combinations (24h x 60m)
-    rules = []
-    for hour in range(24):
-        for minute in range(60):
-            tokens = generate_phrase_tokens(config, mode, hour, minute)
-            if tokens:
-                rules.append({
-                    'when': {'hour_24': hour, 'minute': minute},
-                    'tokens': tokens
-                })
-    
-    # Build JSON structure
-    package_config = {
-        'locale': config['locale'],
-        'mode': mode,
-        'vocab_files': vocab_map,
-        'rules': rules
-    }
-    
-    # Write config.json
-    config_file = output_path / 'config.json'
-    with open(config_file, 'w') as f:
-        json.dump(package_config, f, indent=2)
-    
-    # Create empty audio files
-    audio_files_created = []
-    for filename in set(vocab_map.values()):
-        audio_file = audio_path / filename
-        audio_file.touch()  # Create empty file
-        audio_files_created.append(filename)
-    
-    # Return statistics
-    return {
-        'output_dir': str(output_path),
-        'config_file': str(config_file),
-        'audio_dir': str(audio_path),
-        'rules_count': len(rules),
-        'audio_files_count': len(audio_files_created),
-        'vocab_entries_count': len(vocab_map),
-        'audio_files': sorted(audio_files_created)
-    }
+    Resolve expanded vocabulary keys to audio filenames.
+
+    Parameters
+    ----------
+    vocab : dict[str, str]
+        Vocabulary mapping from symbolic token keys to filenames.
+    tokens : list[str]
+        Expanded vocabulary keys.
+
+    Returns
+    -------
+    list[str]
+        Audio filenames corresponding to the provided tokens.
+
+    Raises
+    ------
+    KeyError
+        If any expanded token is missing from the vocabulary.
+    """
+    return [vocab[token] for token in tokens]
+
+
+def generate_audio_sequence(
+    vocab_path: str | Path,
+    rules_path: str | Path,
+    hour_24: int,
+    minute: int,
+) -> list[str]:
+    """
+    Load the selected locale assets and generate the audio sequence for a time.
+
+    This is a convenience wrapper that:
+    1. loads the vocabulary file
+    2. loads the selected mode rules file
+    3. generates the expanded tokens
+    4. resolves those tokens to audio filenames
+
+    Parameters
+    ----------
+    vocab_path : str | Path
+        Path to the locale vocabulary JSON file.
+    rules_path : str | Path
+        Path to the selected mode rules JSON file.
+    hour_24 : int
+        Hour in 24 hour time, from 0 to 23.
+    minute : int
+        Minute value, from 0 to 59.
+
+    Returns
+    -------
+    list[str]
+        Ordered list of audio filenames to play.
+
+    Raises
+    ------
+    ValueError
+        If no rule matches the given time.
+    """
+    vocab = load_vocab(vocab_path)
+    mode_rules = load_mode_rules(rules_path)
+
+    tokens = generate_phrase_tokens(mode_rules, hour_24, minute)
+    if tokens is None:
+        raise ValueError(f'No matching rule found for {hour_24:02d}:{minute:02d}.')
+
+    return resolve_audio_files(vocab, tokens)
