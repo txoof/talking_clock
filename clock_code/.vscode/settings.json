@@ -1,0 +1,20 @@
+{
+    "python.languageServer": "Pylance",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none",
+        "reportShadowedImports": "none"
+    },
+    "circuitpython.board.version": null,
+    "circuitpythonsync.cpbaseversion": "10",
+    "circuitpythonsync.cpfullversion": "10.0.3",
+    "circuitpythonsync.curlibtag": "20260214",
+    "python.analysis.extraPaths": [
+        "/Users/aaronciuffo/.vscode/extensions/wmerkens.vscode-circuitpython-v2-cursor-ai-0.3.3/boards/0x239A/0x80F4",
+        "/Users/aaronciuffo/.vscode/extensions/wmerkens.vscode-circuitpython-v2-cursor-ai-0.3.3/stubs",
+        "/Users/aaronciuffo/Library/Application Support/Code/User/globalStorage/wmerkens.vscode-circuitpython-v2-cursor-ai/bundle/20260204/adafruit-circuitpython-bundle-py-20260204/lib",
+        "/Users/aaronciuffo/Documents/Hobby/Projects/talking_clock/clock_code/libArchive/libstubs",
+        "/Users/aaronciuffo/Library/Application Support/Code/User/globalStorage/padgettholdings.circuitpythonsync/stubs/circuitpython_stubs-10.0.3"
+    ],
+    "circuitpythonsync.drivepath": "/Volumes/CIRCUITPY",
+    "circuitpythonsync.doNotShowWelcome": true
+}
