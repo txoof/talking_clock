@@ -53,12 +53,22 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
+
 _NUMBER_FIELDS = {
     'hour_24_word': 'h24',
     'hour_12_word': 'h12',
     'next_hour_12_word': 'next_h12',
     'minute_word': 'm',
     'minute_to_next_word': 'm_to',
+}
+
+_PLACEHOLDER_ALIASES = {
+    'hour_24': 'h24',
+    'hour_12': 'h12',
+    'next_hour_12': 'next_h12',
+    'minute': 'm',
+    'minute_to_next': 'm_to',
+    'day_period': 'period',
 }
 
 
@@ -79,6 +89,10 @@ def _compact_token(template: str) -> str:
     - 'words.quarter'
     - 'words.{period}'
 
+    Already-qualified tokens such as 'number_words.{minute}' or
+    'words.{day_period}' are passed through, but known placeholder names are
+    normalized to the runtime field names used on the Pico.
+
     Parameters
     ----------
     template : str
@@ -89,6 +103,13 @@ def _compact_token(template: str) -> str:
     str
         The compact runtime token string.
     """
+def _compact_token(template: str) -> str:
+    if template.startswith('words.') or template.startswith('number_words.'):
+        compact = template
+        for source_name, target_name in _PLACEHOLDER_ALIASES.items():
+            compact = compact.replace(f'{{{source_name}}}', f'{{{target_name}}}')
+        return compact
+
     if not template.startswith('{'):
         return f'words.{template}'
 
@@ -99,6 +120,9 @@ def _compact_token(template: str) -> str:
 
     if field_name == 'day_period_word':
         return 'words.{period}'
+
+    if field_name in _PLACEHOLDER_ALIASES:
+        return f'words.{{{_PLACEHOLDER_ALIASES[field_name]}}}'
 
     return f'words.{field_name}'
 
@@ -442,8 +466,15 @@ def generate_vocab(config: dict[str, Any]) -> dict[str, str]:
         if not isinstance(section_data, dict):
             continue
 
-        for key, value in section_data.items():
-            flat_vocab[f'{section_name}.{key}'] = value
+        for key in section_data.keys():
+            symbolic_key = f'{section_name}.{key}'
+
+            if section_name == 'number_words':
+                filename = f'number_{key}.wav'
+            else:
+                filename = f'{section_name}_{key}.wav'
+
+            flat_vocab[symbolic_key] = filename
 
     return flat_vocab
 
