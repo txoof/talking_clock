@@ -2,7 +2,9 @@
 
 """Command-line interface for talking-clock-audio."""
 
+import json
 import logging
+from datetime import datetime
 import click
 import questionary
 from pathlib import Path
@@ -602,6 +604,22 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
                 continue
             click.echo(f"  {key}_rules.json: {size} bytes")
 
+        from . import __version__
+        generation_info = {
+            "locale": locale,
+            "voice": voice_name,
+            "quality": quality,
+            "model": model_path.name,
+            "highpass_cutoff": effective_cutoff,
+            "speaker_threshold": effective_threshold,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "tca_version": __version__,
+        }
+        generation_info_path = Path(output_dir) / "generation_info.json"
+        with open(generation_info_path, "w") as f:
+            json.dump(generation_info, f, indent=2)
+        click.echo(f"  generation_info.json written")
+
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")
         click.echo("="*60)
@@ -636,7 +654,7 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
 
 @cli.command('debug')
 @click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
-              help='Path to debug configuration YAML file')
+              help='Path to debug configuration YAML file (default: tests/speaker_test.yaml)')
 @click.option('--model', help='Path to voice model .onnx file')
 @click.option('--output-dir', default='./audio/debug',
               help='Output directory (default: ./audio/debug)')
@@ -651,37 +669,28 @@ def generate_debug(yaml_path, model, output_dir, force):
     Sentences are normalized to a fixed peak before processing so that
     filter and limiter comparisons are not confounded by volume differences.
 
+    If no --yaml is supplied, uses tests/speaker_test.yaml by default.
+
     \b
-    Interactive mode (prompts for missing options):
-      tca debug
+    Default (uses tests/speaker_test.yaml):
+      tca debug --model ./models/.../model.onnx
 
     \b
     Expert mode:
-      tca debug --yaml speaker_test.yaml --model ./models/.../model.onnx
+      tca debug --yaml tests/speaker_test.yaml --model ./models/.../model.onnx
     """
     from .debug_generator import load_debug_yaml, generate_debug_package
 
+    DEFAULT_DEBUG_YAML = Path('tests/speaker_test.yaml')
+
     try:
         if not yaml_path:
-            debug_yamls = sorted(set(
-                list(Path('.').glob('*debug*.yaml')) +
-                list(Path('.').glob('*speaker*.yaml')) +
-                list(Path('.').glob('*test*.yaml'))
-            ))
-
-            if not debug_yamls:
-                click.echo("No debug YAML files found in current directory.")
-                click.echo("Expected filenames matching: *debug*.yaml, *speaker*.yaml, *test*.yaml")
-                return
-
-            choices = [str(f) for f in debug_yamls]
-            yaml_path = questionary.select(
-                "Select debug configuration file:",
-                choices=choices
-            ).ask()
-
-            if not yaml_path:
-                click.echo("Cancelled.")
+            if DEFAULT_DEBUG_YAML.exists():
+                yaml_path = str(DEFAULT_DEBUG_YAML)
+                click.echo(f"Using default: {yaml_path}")
+            else:
+                click.echo(f"Default not found: {DEFAULT_DEBUG_YAML}")
+                click.echo("Supply a YAML file with --yaml.")
                 return
 
         config = load_debug_yaml(yaml_path)
