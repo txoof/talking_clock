@@ -1,6 +1,6 @@
-locale: en_US
+locale: en_GB
 description: >
-  American English time phrases.
+  British English time phrases.
   Source YAML for compiling locale-specific Pico rule files.
 
 vocab:
@@ -41,7 +41,7 @@ vocab:
     quarter: "every quarter hour"
 
   voice:
-    name: "U.S. English"
+    name: "British English"
 
   mode:
     operational: "operational"
@@ -188,7 +188,7 @@ modes:
       oclock: ["number_words.{h12}", "words.oclock"]
       minutes_past: ["number_words.{minute}", "words.past", "number_words.{h12}"]
       quarter_past: ["words.quarter", "words.past", "number_words.{h12}"]
-      half_past: ["words.half", "words.past", "number_words.{h12}"]
+      half_to_next: ["words.half", "number_words.{next_h12}"]
       minutes_to: ["number_words.{m_to}", "words.to", "number_words.{next_h12}"]
       quarter_to: ["words.quarter", "words.to", "number_words.{next_h12}"]
       almost: ["words.almost", "number_words.{next_h12}"]
@@ -220,22 +220,22 @@ modes:
       19: minutes_past
       20: minutes_past
       21: minutes_past
-      22: half_past
-      23: half_past
-      24: half_past
-      25: half_past
-      26: half_past
-      27: half_past
-      28: half_past
-      29: half_past
-      30: half_past
-      31: half_past
-      32: half_past
-      33: half_past
-      34: half_past
-      35: half_past
-      36: half_past
-      37: half_past
+      22: half_to_next
+      23: half_to_next
+      24: half_to_next
+      25: half_to_next
+      26: half_to_next
+      27: half_to_next
+      28: half_to_next
+      29: half_to_next
+      30: half_to_next
+      31: half_to_next
+      32: half_to_next
+      33: half_to_next
+      34: half_to_next
+      35: half_to_next
+      36: half_to_next
+      37: half_to_next
       38: minutes_to
       39: minutes_to
       40: minutes_to
@@ -260,6 +260,11 @@ modes:
       59: almost
 
 examples:
+  "14:30":
+    operational: "fourteen thirty hours"
+    broadcast: "two thirty p m"
+    standard: "two thirty"
+    casual: "half three"
   "20:48":
     operational: "twenty forty eight hours"
     broadcast: "eight forty eight p m"
@@ -267,7 +272,5 @@ examples:
     casual: "quarter to nine"
   "08:12":
     casual: "quarter past eight"
-  "08:25":
-    casual: "half past eight"
   "08:56":
     casual: "almost nine"
