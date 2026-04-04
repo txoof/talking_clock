@@ -2,9 +2,7 @@
 
 """Command-line interface for talking-clock-audio."""
 
-import json
 import logging
-from datetime import datetime
 import click
 import questionary
 from pathlib import Path
@@ -16,6 +14,15 @@ from .tts_generator import (
 )
 from .rules_generator import load_yaml, write_locale_package
 from .voice_manager import get_available_voices
+from .deploy import (
+    detect_mounted_volumes,
+    scan_local_packages,
+    scan_sd_packages,
+    copy_package,
+    delete_package,
+    format_package_summary,
+    _is_voice_package,
+)
 
 
 def find_yaml_files(search_dir='.'):
@@ -604,22 +611,6 @@ def generate_audio(yaml_path, model, output_dir, force, speaker_threshold, highp
                 continue
             click.echo(f"  {key}_rules.json: {size} bytes")
 
-        from . import __version__
-        generation_info = {
-            "locale": locale,
-            "voice": voice_name,
-            "quality": quality,
-            "model": model_path.name,
-            "highpass_cutoff": effective_cutoff,
-            "speaker_threshold": effective_threshold,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "tca_version": __version__,
-        }
-        generation_info_path = Path(output_dir) / "generation_info.json"
-        with open(generation_info_path, "w") as f:
-            json.dump(generation_info, f, indent=2)
-        click.echo(f"  generation_info.json written")
-
         click.echo("\n" + "="*60)
         click.echo("Generation complete!")
         click.echo("="*60)
@@ -770,6 +761,181 @@ def generate_debug(yaml_path, model, output_dir, force):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise click.Abort()
+
+
+@cli.command('deploy')
+@click.option('--source-dir', default='./audio',
+              help='Local audio directory to scan (default: ./audio)')
+@click.option('--target', default=None,
+              help='Path to mounted SD card volume (skips auto-detect)')
+@click.option('--force', is_flag=True,
+              help='Skip overwrite confirmation when copying')
+def deploy(source_dir, target, force):
+    """Deploy voice packages to a mounted SD card.
+
+    Shows local packages and what is already on the card side by side.
+    Lets you select packages to copy and packages to delete.
+
+    \b
+    Interactive mode:
+      tca deploy
+
+    \b
+    Expert mode:
+      tca deploy --target /Volumes/TALK-CLOCK
+      tca deploy --source-dir ./audio --target /Volumes/TALK-CLOCK --force
+    """
+    source_path = Path(source_dir)
+
+    # --- Resolve target volume ---
+    if not target:
+        volumes = detect_mounted_volumes()
+        if not volumes:
+            click.echo("No mounted volumes detected.")
+            click.echo("Mount your SD card and try again, or use --target to specify a path.")
+            return
+
+        volume_choices = [str(v) for v in volumes]
+        target = questionary.select(
+            "Select SD card volume:",
+            choices=volume_choices,
+        ).ask()
+
+        if not target:
+            click.echo("Cancelled.")
+            return
+
+    sd_root = Path(target)
+    if not sd_root.exists():
+        click.echo(f"Target path does not exist: {target}", err=True)
+        return
+
+    # --- Scan packages ---
+    local_packages = scan_local_packages(source_path)
+    sd_packages = scan_sd_packages(sd_root)
+
+    sd_names = {p.name for p in sd_packages}
+    local_names = {p.name for p in local_packages}
+
+    # --- Display summary ---
+    click.echo(f"\nSource:  {source_path.resolve()}")
+    click.echo(f"Target:  {sd_root.resolve()}")
+
+    click.echo(f"\n{'LOCAL PACKAGES':<48} {'ON SD CARD'}")
+    click.echo("-" * 80)
+
+    all_names = sorted(local_names | sd_names)
+    for name in all_names:
+        local = next((p for p in local_packages if p.name == name), None)
+        on_sd = next((p for p in sd_packages if p.name == name), None)
+
+        local_str = format_package_summary(local) if local else click.style("(not present)", fg="white", dim=True)
+        sd_str = click.style(
+            format_package_summary(on_sd) if on_sd else "(not present)",
+            fg="green" if on_sd else "white",
+            dim=not on_sd,
+        )
+
+        if local and on_sd:
+            local_str = click.style(format_package_summary(local), fg="yellow")
+            sd_str = click.style(format_package_summary(on_sd), fg="yellow")
+        elif local and not on_sd:
+            local_str = click.style(format_package_summary(local), fg="cyan")
+
+        click.echo(f"{local_str:<56} {sd_str}")
+
+    click.echo()
+    click.echo(click.style("cyan   ", fg="cyan") + " = local only")
+    click.echo(click.style("yellow ", fg="yellow") + " = exists on both")
+    click.echo(click.style("green  ", fg="green") + " = on SD card only")
+
+    # --- Select packages to copy ---
+    if not local_packages:
+        click.echo("\nNo local packages found to copy.")
+    else:
+        copy_choices = [
+            questionary.Choice(
+                title=format_package_summary(p),
+                value=p,
+                checked=False,
+            )
+            for p in local_packages
+        ]
+
+        to_copy = questionary.checkbox(
+            "\nSelect packages to copy to SD card:",
+            choices=copy_choices,
+        ).ask()
+
+        if to_copy is None:
+            click.echo("Cancelled.")
+            return
+
+        for package in to_copy:
+            dest = sd_root / package.name
+            if dest.exists() and not force:
+                overwrite = questionary.confirm(
+                    f"'{package.name}' already exists on SD card. Overwrite?"
+                ).ask()
+                if not overwrite:
+                    click.echo(f"  Skipped: {package.name}")
+                    continue
+
+            click.echo(f"  Copying {package.name} ...", nl=False)
+            try:
+                copy_package(package, sd_root)
+                click.echo(click.style(" done", fg="green"))
+            except Exception as e:
+                click.echo(click.style(f" FAILED: {e}", fg="red"))
+
+    # --- Select packages to delete from SD card ---
+    if not sd_packages:
+        click.echo("\nNo packages on SD card to delete.")
+    else:
+        if not questionary.confirm(
+            "\nWould you like to delete any packages from the SD card?"
+        ).ask():
+            click.echo("No packages deleted.")
+        else:
+            delete_choices = [
+                questionary.Choice(
+                    title=format_package_summary(p),
+                    value=p,
+                    checked=False,
+                )
+                for p in sd_packages
+            ]
+
+            to_delete = questionary.checkbox(
+                "\nSelect packages to DELETE from SD card:",
+                choices=delete_choices,
+            ).ask()
+
+            if to_delete is None:
+                click.echo("Cancelled.")
+                return
+
+            for package in to_delete:
+                if not _is_voice_package(package.path):
+                    click.echo(f"  Skipped (not a valid voice package): {package.name}")
+                    continue
+
+                confirm = questionary.confirm(
+                    f"Permanently delete '{package.name}' from SD card?"
+                ).ask()
+                if not confirm:
+                    click.echo(f"  Skipped: {package.name}")
+                    continue
+
+                click.echo(f"  Deleting {package.name} ...", nl=False)
+                try:
+                    delete_package(package)
+                    click.echo(click.style(" done", fg="green"))
+                except Exception as e:
+                    click.echo(click.style(f" FAILED: {e}", fg="red"))
+
+    click.echo("\nTo repeat this operation:")
+    click.echo(f"  tca deploy --source-dir {source_dir} --target {target}")
 
 
 if __name__ == '__main__':
