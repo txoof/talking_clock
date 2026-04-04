@@ -2,12 +2,12 @@
 
 A command-line tool for generating multilingual time phrase audio files for the Talking Clock project.
 
-This package uses Piper TTS to synthesize s- [Talking Clock Audio](#talking-clock-audio)
 - [Talking Clock Audio](#talking-clock-audio)
   - [Requirements](#requirements)
   - [Installation](#installation)
   - [Quick Start](#quick-start)
   - [Generating a Voice Package](#generating-a-voice-package)
+  - [Audio Sample Requirements](#audio-sample-requirements)
   - [Adding a New Language](#adding-a-new-language)
   - [Building a YAML configuration with an LLM](#building-a-yaml-configuration-with-an-llm)
   - [Deploying to the Clock](#deploying-to-the-clock)
@@ -18,6 +18,8 @@ This package uses Piper TTS to synthesize s- [Talking Clock Audio](#talking-cloc
   - [Contributing](#contributing)
   - [Acknowledgments](#acknowledgments)
   - [Support](#support)
+
+This package uses Piper TTS to synthesize spoken time announcements from YAML-defined phrase rules. It produces audio packages ready to deploy to the clock's SD card, along with the compiled rule files the Pico firmware uses to select and sequence audio at runtime.
 
 ## Requirements
 
@@ -277,6 +279,50 @@ Result: OK
 ```
 
 Any mismatch between the generated phrase and the expected phrase in the `examples:` block is reported as a warning. Fix the rules in the YAML and re-run until all modes pass.
+
+## Audio Sample Requirements
+
+All WAV files must match the mixer configuration exactly. Files that do not match will fail to play silently or raise a `ValueError` at runtime on the Pico.
+
+The `tca generate` command always produces files in the correct format. This section is only relevant if you are sourcing audio files from another tool or converting existing files.
+
+### Required format
+
+| Property | Value |
+| -------- | ----- |
+| Format | PCM WAV (uncompressed) |
+| Sample rate | 22050 Hz |
+| Channels | Mono (1 channel) |
+| Bit depth | 16-bit signed |
+
+### Converting files with ffmpeg
+
+Convert a single file:
+
+```bash
+ffmpeg -i input.wav -ar 22050 -ac 1 -sample_fmt s16 output.wav
+```
+
+Convert all WAV files in the current directory, writing results to a `converted/` subdirectory:
+
+```bash
+mkdir -p converted
+for f in *.wav; do
+    ffmpeg -i "$f" -ar 22050 -ac 1 -sample_fmt s16 "converted/$f"
+done
+```
+
+### Verifying a file
+
+```bash
+ffprobe -v error -show_entries stream=sample_rate,channels,sample_fmt -of compact input.wav
+```
+
+Expected output:
+
+```text
+sample_rate=22050|channels=1|sample_fmt=s16
+```
 
 ## Adding a New Language
 
@@ -629,7 +675,7 @@ Debug mode is entered by holding the ANNOUNCE button during a cold boot or soft 
 mpremote connect auto
 ```
 
-Once connected, press `Ctrl+D` to perform a soft reboot whole hodling the ANNOUNCE button on the clock. 
+Once connected, press `Ctrl+D` to perform a soft reboot while holding the ANNOUNCE button on the clock.
 
 ### Navigating debug mode
 
