@@ -1,0 +1,10 @@
+{
+  "locale": "nl_NL",
+  "voice": "pim",
+  "quality": "medium",
+  "model": "nl_NL-pim-medium.onnx",
+  "highpass_cutoff": null,
+  "speaker_threshold": 24000,
+  "generated_at": "2026-04-04T12:25:08",
+  "tca_version": "0.2.0"
+}
