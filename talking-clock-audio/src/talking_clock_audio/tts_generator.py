@@ -18,8 +18,8 @@ from piper import PiperVoice
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SPEAKER_THRESHOLD = 16000
-DEFAULT_HIGHPASS_CUTOFF = 300
+DEFAULT_SPEAKER_THRESHOLD = 24000
+DEFAULT_HIGHPASS_CUTOFF = 0
 
 def build_vocab_map(config: dict[str, Any]) -> dict[str, str]:
     """
