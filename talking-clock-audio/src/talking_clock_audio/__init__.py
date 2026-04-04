@@ -10,7 +10,7 @@ accessible talking clock applications.
 import logging
 import sys
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def setup_logging(level: str = 'WARNING', log_file: str | None = None) -> None:
