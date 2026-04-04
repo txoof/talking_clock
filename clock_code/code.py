@@ -140,6 +140,60 @@ def reload_rules():
 active_rules = None
 reload_rules()
 
+# --- Temporary startup rules smoke test for Pico integration testing ---
+# This is only for testing the new compiled rules and vocab format.
+# Remove this block after verifying that both standard and casual mode
+# rule files load and resolve correctly on-device.
+if active_rules:
+    vocab = active_voice["vocab"]
+
+    test_cases = [
+        ("standard", 8, 9),
+        ("casual", 20, 48),
+    ]
+
+    for test_mode, test_hour, test_minute in test_cases:
+        test_rules = load_rules(active_voice, test_mode)
+        files = pico_rules.get_audio_files(test_rules, vocab, test_mode, test_hour, test_minute)
+        print(f"TEST {test_mode} {test_hour:02d}:{test_minute:02d} -> {files}")
+else:
+    print("Startup rules test skipped: no rules loaded")
+
+# --- Temporary vocab debug for Pico integration testing ---
+# This is only for testing vocab lookups against the new compiled rules.
+if active_voice:
+    vocab = active_voice["vocab"]
+    print("DEBUG vocab sample keys:", list(vocab.keys())[:20])
+    print("DEBUG vocab number_words.8:", vocab.get("number_words.8"))
+    print("DEBUG vocab words.oh:", vocab.get("words.oh"))
+    print("DEBUG vocab number_words.9:", vocab.get("number_words.9"))
+    print("DEBUG vocab words.quarter:", vocab.get("words.quarter"))
+    print("DEBUG vocab words.to:", vocab.get("words.to"))
+
+# --- Temporary rule debug for Pico integration testing ---
+# This is only for checking the actual compiled rules loaded on-device.
+if active_rules:
+    modes = active_rules.get("modes", {})
+    standard_mode = modes.get("standard")
+    print("DEBUG active_rules keys:", list(active_rules.keys()))
+    print("DEBUG modes keys:", list(modes.keys()))
+
+    if isinstance(standard_mode, list) and standard_mode:
+        print("DEBUG first standard rule:", standard_mode[0])
+        if len(standard_mode) > 3:
+            print("DEBUG fourth standard rule:", standard_mode[3])
+    else:
+        print("DEBUG standard mode object:", standard_mode)
+
+# --- Temporary broadcast debug ---
+test_rules = load_rules(active_voice, "broadcast")
+print("DEBUG broadcast day_period:", test_rules.get("day_period"))
+broadcast_mode = test_rules.get("modes", {}).get("broadcast")
+if isinstance(broadcast_mode, list) and len(broadcast_mode) > 3:
+    print("DEBUG broadcast fourth rule:", broadcast_mode[3])
+print("DEBUG vocab words.am:", active_voice["vocab"].get("words.am"))
+print("DEBUG vocab words.pm:", active_voice["vocab"].get("words.pm"))
+
 volume_step        = config.get("volume_step", 7)
 mixer.voice[0].level = volume_step / VOLUME_STEPS
 volume_dirty_since = None

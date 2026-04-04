@@ -1,54 +1,30 @@
-# pico_rules.py
-# CircuitPython-compatible rule evaluator for talking clock.
-#
-# Usage:
-#   rules = load_rules("/sd/en_US_lessac_medium/rules.json")
-#   vocab = load_vocab("/sd/en_US_lessac_medium/vocab.json")
-#   files = get_audio_files(rules, vocab, "casual", hour_24, minute)
-
 import json
 
 
+"""Helpers for resolving compiled talking-clock rule files on the Pico.
+
+This module is intentionally small and avoids dynamic expression evaluation.
+It supports both:
+1. rule-list mode files, where a mode is an ordered list of rules
+2. minute-map mode files, where a mode defines patterns, special_cases,
+   and minute_map
+"""
+
+
 def load_rules(path):
-    """Load rules.json from disk.
-
-    Args:
-        path: String path to rules.json.
-
-    Returns:
-        Parsed dict from rules.json.
-    """
-    with open(path, "r") as f:
+    """Load one compiled rules JSON file from disk."""
+    with open(path, 'r') as f:
         return json.load(f)
 
 
 def load_vocab(path):
-    """Load vocab.json from disk.
-
-    Args:
-        path: String path to vocab.json.
-
-    Returns:
-        Parsed dict mapping vocab keys to filenames.
-    """
-    with open(path, "r") as f:
+    """Load one compiled vocab JSON file from disk."""
+    with open(path, 'r') as f:
         return json.load(f)
 
 
 def _resolve_period(day_period_table, hour_24):
-    """Resolve the day period vocab key suffix for the given hour.
-
-    The day_period_table is a list of [threshold_or_null, key] pairs,
-    sorted by threshold ascending with null last. The first entry where
-    hour_24 < threshold wins. The null-threshold entry is the fallback.
-
-    Args:
-        day_period_table: List of [threshold_or_null, key_string] pairs.
-        hour_24: Current hour (0-23).
-
-    Returns:
-        Vocab key suffix string (e.g. 'ochtends', 'am'), or None if table empty.
-    """
+    """Resolve the locale day-period key for the given 24-hour value."""
     for entry in day_period_table:
         threshold, key = entry[0], entry[1]
         if threshold is None:
@@ -59,107 +35,69 @@ def _resolve_period(day_period_table, hour_24):
 
 
 def _compute_fields(hour_24, minute, day_period_table):
-    """Compute all runtime substitution fields from raw hour and minute.
-
-    Args:
-        hour_24: Integer hour in 24h format (0-23).
-        minute: Integer minute (0-59).
-        day_period_table: List of [threshold_or_null, key] pairs from rules.json.
-
-    Returns:
-        Dict of substitution keys to values.
-    """
+    """Compute the small set of runtime substitution fields."""
     h12 = ((hour_24 + 11) % 12) + 1
     next_h12 = (h12 % 12) + 1
     m_to = 60 - minute
     period = _resolve_period(day_period_table, hour_24)
 
     return {
-        "h24": hour_24,
-        "h12": h12,
-        "next_h12": next_h12,
-        "m": minute,
-        "m_to": m_to,
-        "minutes_from_half": abs(minute - 30),
-        "period": period,
+        'h24': hour_24,
+        'h12': h12,
+        'next_h12': next_h12,
+        'm': minute,
+        'm_to': m_to,
+        'period': period,
     }
 
 
 def _eval_condition(key, value, hour_24, minute):
-    """Evaluate a single when-condition.
-
-    Args:
-        key: Condition key string (e.g. 'minute_eq', 'hour_24_lt', 'any').
-        value: Condition value (integer or True).
-        hour_24: Current hour (0-23).
-        minute: Current minute (0-59).
-
-    Returns:
-        Boolean result.
-    """
-    if key == "any":
+    """Evaluate a single compiled condition against a time value."""
+    if key == 'any':
         return value is True
 
-    last = key.rfind("_")
+    last = key.rfind('_')
+    if last == -1:
+        return False
+
     field = key[:last]
     op = key[last + 1:]
 
-    if field == "minute":
+    if field == 'minute':
         current = minute
-    elif field == "hour_24":
+    elif field == 'hour_24':
         current = hour_24
     else:
         return False
 
-    if op == "eq":
+    if op == 'eq':
         return current == value
-    if op == "lt":
+    if op == 'lt':
         return current < value
-    if op == "gt":
+    if op == 'gt':
         return current > value
-    if op == "lte":
+    if op == 'lte':
         return current <= value
-    if op == "gte":
+    if op == 'gte':
         return current >= value
+
     return False
 
 
 def _matches_rule(rule, hour_24, minute):
-    """Check if all when-conditions match.
-
-    Args:
-        rule: Dict with 'when' and 'tokens'.
-        hour_24: Current hour (0-23).
-        minute: Current minute (0-59).
-
-    Returns:
-        Boolean.
-    """
-    for key, value in rule["when"].items():
+    """Return True if all conditions in a rule match the provided time."""
+    when = rule.get('when', {})
+    for key, value in when.items():
         if not _eval_condition(key, value, hour_24, minute):
             return False
     return True
 
 
 def _resolve_token(token, fields, vocab):
-    """Resolve a compact token string to an audio filename.
-
-    Token format examples:
-        'words.midnight'          -> vocab['words.midnight']
-        'number_words.{h12}'     -> vocab['number_words.11']  (for h12=11)
-        'words.{period}'         -> vocab['words.ochtends']
-
-    Args:
-        token: Compact token string from rules.json.
-        fields: Dict of computed field values from _compute_fields().
-        vocab: Dict mapping vocab keys to filenames.
-
-    Returns:
-        Filename string, or None if vocab key not found.
-    """
-    if "{" in token:
-        start = token.index("{") + 1
-        end = token.index("}")
+    """Resolve one compiled token into a vocab filename."""
+    if '{' in token:
+        start = token.index('{') + 1
+        end = token.index('}')
         field_key = token[start:end]
         value = fields.get(field_key)
         if value is None:
@@ -171,33 +109,92 @@ def _resolve_token(token, fields, vocab):
     return vocab.get(vocab_key)
 
 
-def get_audio_files(rules, vocab, mode, hour_24, minute):
-    """Get ordered list of audio filenames for a given time and mode.
+def _get_single_mode_config(rules_doc, requested_mode):
+    """Return the config for the requested mode from a compiled rules file."""
+    modes = rules_doc.get('modes', {})
+    if requested_mode in modes:
+        return modes[requested_mode]
 
-    Args:
-        rules: Loaded rules dict from load_rules().
-        vocab: Loaded vocab dict from load_vocab().
-        mode: Mode name string (e.g. 'casual', 'standard').
-        hour_24: Current hour in 24h format (0-23).
-        minute: Current minute (0-59).
+    if len(modes) == 1:
+        only_mode = next(iter(modes))
+        return modes[only_mode]
 
-    Returns:
-        List of filename strings to play in order, or None if no rule matched.
-    """
-    mode_rules = rules["modes"].get(mode)
-    if mode_rules is None:
-        return None
+    return None
 
-    day_period_table = rules.get("day_period", [])
-    fields = _compute_fields(hour_24, minute, day_period_table)
 
-    for rule in mode_rules:
+def _resolve_rule_list_mode(mode_config, fields, vocab, hour_24, minute):
+    """Resolve audio files for a mode stored as an ordered list of rules."""
+    for rule in mode_config:
         if _matches_rule(rule, hour_24, minute):
             files = []
-            for token in rule["tokens"]:
+            for token in rule['tokens']:
                 filename = _resolve_token(token, fields, vocab)
                 if filename is not None:
                     files.append(filename)
             return files
+    return None
+
+
+def _resolve_minute_map_mode(mode_config, fields, vocab, hour_24, minute):
+    """Resolve audio files for a mode stored as patterns plus a minute map."""
+    patterns = mode_config.get('patterns', {})
+    special_cases = mode_config.get('special_cases', {})
+    minute_map = mode_config.get('minute_map', {})
+
+    time_key = '{:02d}:{:02d}'.format(hour_24, minute)
+    pattern_name = special_cases.get(time_key)
+    if pattern_name is None:
+        pattern_name = minute_map.get(minute)
+        if pattern_name is None:
+            pattern_name = minute_map.get(str(minute))
+
+    if pattern_name is None:
+        return None
+
+    tokens = patterns.get(pattern_name)
+    if tokens is None:
+        return None
+
+    files = []
+    for token in tokens:
+        filename = _resolve_token(token, fields, vocab)
+        if filename is not None:
+            files.append(filename)
+    return files
+
+
+def get_audio_files(rules_doc, vocab, mode, hour_24, minute):
+    """Resolve the ordered list of audio filenames for one time phrase.
+
+    Parameters
+    ----------
+    rules_doc : dict
+        Parsed JSON document for one compiled rules file.
+    vocab : dict
+        Parsed vocab.json mapping symbolic tokens to wav filenames.
+    mode : str
+        Requested mode name such as 'standard' or 'casual'.
+    hour_24 : int
+        Hour in 24-hour format.
+    minute : int
+        Minute value.
+
+    Returns
+    -------
+    list[str] | None
+        Ordered wav filenames, or None if no rule matched.
+    """
+    mode_config = _get_single_mode_config(rules_doc, mode)
+    if mode_config is None:
+        return None
+
+    day_period_table = rules_doc.get('day_period', [])
+    fields = _compute_fields(hour_24, minute, day_period_table)
+
+    if isinstance(mode_config, list):
+        return _resolve_rule_list_mode(mode_config, fields, vocab, hour_24, minute)
+
+    if isinstance(mode_config, dict) and 'minute_map' in mode_config and 'patterns' in mode_config:
+        return _resolve_minute_map_mode(mode_config, fields, vocab, hour_24, minute)
 
     return None
