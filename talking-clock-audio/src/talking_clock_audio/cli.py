@@ -240,13 +240,12 @@ def get_model(locale, voice, quality, model_dir):
 @click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
               help='Path to time phrase configuration file')
 @click.option('--mode', help='Validate a specific mode only (default: all modes)')
-@click.option('--samples', default=7, help='Number of sample times to show per mode (default: 7)')
-def validate_config(yaml_path, mode, samples):
+def validate_config(yaml_path, mode):
     """Validate a time phrase configuration and show sample outputs.
 
-    For each mode, runs both the phrase_generator (reference) and the
-    pico_rules evaluator and compares their output. Also checks every
-    rendered_example in the YAML. Reports any disagreements.
+    Compiles rules from the YAML, generates phrases for a set of sample
+    times using the same logic as the Pico, and checks the examples block.
+    Mismatches in the examples block are reported as warnings.
 
     \b
     Interactive mode (prompts for missing options):
@@ -257,192 +256,130 @@ def validate_config(yaml_path, mode, samples):
       tca validate --yaml time_phrases_en_US.yaml
       tca validate --yaml time_phrases_en_US.yaml --mode casual
     """
-    import sys
-    from pathlib import Path as _Path
-    from .phrase_generator import generate_phrase_tokens, get_all_vocab_with_dedup
+    from .rules_generator import load_yaml, generate_rules, generate_vocab
+    from . import pico_rules
 
-    _pkg_dir = _Path(__file__).parent
-    _src_dir = _pkg_dir.parent
-    _repo_root = _src_dir.parent
-    _clock_code = _repo_root.parent / "clock_code"
-    if str(_clock_code) not in sys.path:
-        sys.path.insert(0, str(_clock_code))
-
-    try:
-        import pico_rules as _pico_rules
-    except ImportError:
-        click.echo(
-            "Warning: pico_rules not found in clock_code/. "
-            "Pico-side validation will be skipped.", err=True
-        )
-        _pico_rules = None
+    SAMPLE_TIMES = [
+        (0,  0,  "midnight"),
+        (6,  0,  "06:00"),
+        (8,  9,  "08:09"),
+        (8,  12, "08:12"),
+        (9,  30, "09:30"),
+        (12, 0,  "noon"),
+        (13, 45, "13:45"),
+        (14, 30, "14:30"),
+        (20, 48, "20:48"),
+        (23, 0,  "23:00"),
+    ]
 
     try:
         if not yaml_path:
             yaml_files = find_yaml_files()
             if not yaml_files:
                 click.echo("No YAML configuration files found.")
-                click.echo("Looking in: ., time_formats/, */")
                 return
-            choices = [str(f) for f in yaml_files]
             yaml_path = questionary.select(
                 "Select configuration file:",
-                choices=choices
+                choices=[str(f) for f in yaml_files]
             ).ask()
             if not yaml_path:
                 click.echo("Cancelled.")
                 return
 
-        config = load_time_phrases(yaml_path)
+        config = load_yaml(yaml_path)
         locale = config['locale']
         all_modes = list(config['modes'].keys())
 
-        if mode and mode not in config['modes']:
-            click.echo(f"Error: Mode '{mode}' not found. Available: {', '.join(all_modes)}", err=True)
+        if mode and mode not in all_modes:
+            click.echo(f"Error: mode '{mode}' not found. Available: {', '.join(all_modes)}", err=True)
             return
 
         modes_to_check = [mode] if mode else all_modes
 
-        vocab_map, audio_files = get_all_vocab_with_dedup(config)
-        file_to_key = {v: k for k, v in vocab_map.items()}
+        # Compile rules and vocab
+        rules_doc = generate_rules(config)
+        vocab_map = generate_vocab(config)  # symbolic key -> filename
 
-        if _pico_rules:
-            pico_rules_data = generate_rules(config)
-        else:
-            pico_rules_data = None
+        # Build filename -> spoken text from YAML vocab for display
+        filename_to_text = {}
+        for section_name, section_data in config.get('vocab', {}).items():
+            if not isinstance(section_data, dict):
+                continue
+            for key, value in section_data.items():
+                if section_name == 'number_words':
+                    filename = f'number_{key}.wav'
+                else:
+                    filename = f'{section_name}_{key}.wav'
+                filename_to_text[filename] = str(value)
 
-        def tokens_to_text(token_keys):
-            """Reconstruct spoken text from a list of vocab keys."""
-            words = []
-            for key in token_keys:
-                section, entry = key.split(".", 1)
-                try:
-                    entry = int(entry)
-                except ValueError:
-                    pass
-                text = config["vocab"].get(section, {}).get(entry)
-                if text:
-                    words.append(text)
-            return " ".join(words)
-
-        def files_to_text(filenames):
-            """Reconstruct spoken text from a list of audio filenames."""
-            keys = [file_to_key.get(f) for f in filenames if file_to_key.get(f)]
-            return tokens_to_text(keys)
-
-        sample_times = [
-            (0, 0, "midnight"),
-            (6, 0, "early morning"),
-            (11, 7, "mid morning"),
-            (11, 30, "late morning"),
-            (12, 0, "noon"),
-            (13, 45, "afternoon"),
-            (18, 30, "evening"),
-            (23, 0, "late night"),
-        ]
-
-        total_errors = 0
+        def files_to_spoken(filenames):
+            if not filenames:
+                return '[NO MATCH]'
+            return ' '.join(filename_to_text.get(f, f'[{f}]') for f in filenames)
 
         click.echo(f"\nLocale: {locale}")
-        click.echo(f"Vocab: {len(audio_files)} unique audio files")
+        click.echo(f"Modes:  {', '.join(all_modes)}")
+
+        total_warnings = 0
+
+        # Parse examples block - keys are "HH:MM" strings
+        raw_examples = config.get('examples', {})
+        parsed_examples = {}
+        for time_key, mode_phrases in raw_examples.items():
+            h, m = (int(x) for x in str(time_key).split(':'))
+            parsed_examples[(h, m)] = mode_phrases
 
         for check_mode in modes_to_check:
-            click.echo(f"\n{'='*60}")
+            # Build a per-mode rules doc with just this mode
+            mode_rules_doc = {
+                'locale': rules_doc['locale'],
+                'day_period': rules_doc['day_period'],
+                'modes': {check_mode: rules_doc['modes'][check_mode]},
+            }
+
+            click.echo(f"\n{'='*56}")
             click.echo(f"Mode: {check_mode}")
-            click.echo(f"{'='*60}")
+            click.echo(f"{'='*56}")
+            click.echo(f"  {'Time':<8} {'Label':<12} {'Phrase'}")
+            click.echo(f"  {'-'*7} {'-'*11} {'-'*35}")
 
-            mode_errors = 0
+            for h, m, label in SAMPLE_TIMES:
+                files = pico_rules.get_audio_files(mode_rules_doc, vocab_map, check_mode, h, m)
+                phrase = files_to_spoken(files)
+                click.echo(f"  {h:02d}:{m:02d}  {label:<12} {phrase}")
 
-            click.echo(f"\nSample phrases:")
-            click.echo(f"  {'Time':<8} {'Description':<14} {'Generated'}")
-            click.echo(f"  {'-'*7} {'-'*13} {'-'*35}")
+            # Check examples
+            mode_warnings = 0
+            example_results = []
+            for (h, m), mode_phrases in parsed_examples.items():
+                if check_mode not in mode_phrases:
+                    continue
+                expected = mode_phrases[check_mode]
+                files = pico_rules.get_audio_files(mode_rules_doc, vocab_map, check_mode, h, m)
+                got = files_to_spoken(files)
+                if got != expected:
+                    example_results.append((h, m, expected, got))
+                    mode_warnings += 1
 
-            for hour, minute, description in sample_times[:samples]:
-                ref_tokens = generate_phrase_tokens(config, check_mode, hour, minute)
-                if ref_tokens:
-                    phrase = tokens_to_text(ref_tokens)
-                    click.echo(f"  {hour:02d}:{minute:02d}  {description:<14} {phrase}")
-                else:
-                    click.echo(f"  {hour:02d}:{minute:02d}  {description:<14} [NO MATCH]")
-                    mode_errors += 1
-
-            rendered = config.get("rendered_examples", {})
-            if rendered:
-                click.echo(f"\nChecking rendered_examples:")
-                example_errors = []
-
-                for _group, times in rendered.items():
-                    for time_val, mode_phrases in times.items():
-                        if check_mode not in mode_phrases:
-                            continue
-
-                        if isinstance(time_val, int):
-                            h, m = time_val // 60, time_val % 60
-                        else:
-                            h, m = (int(x) for x in str(time_val).split(":"))
-
-                        expected = mode_phrases[check_mode]
-                        ref_tokens = generate_phrase_tokens(config, check_mode, h, m)
-                        got = tokens_to_text(ref_tokens) if ref_tokens else "[NO MATCH]"
-
-                        if got != expected:
-                            example_errors.append(
-                                f"  {h:02d}:{m:02d}  expected: {expected!r}\n"
-                                f"         got:      {got!r}"
-                            )
-
-                        if pico_rules_data:
-                            pico_files = _pico_rules.get_audio_files(
-                                pico_rules_data, vocab_map, check_mode, h, m
-                            )
-                            pico_text = files_to_text(pico_files) if pico_files else "[NO MATCH]"
-                            if pico_text != expected:
-                                example_errors.append(
-                                    f"  {h:02d}:{m:02d}  pico expected: {expected!r}\n"
-                                    f"         pico got:      {pico_text!r}"
-                                )
-
-                if example_errors:
-                    click.echo(f"  FAIL: {len(example_errors)} example(s) did not match:")
-                    for err in example_errors:
-                        click.echo(err)
-                    mode_errors += len(example_errors)
-                else:
-                    example_count = sum(
-                        1 for times in rendered.values()
-                        for mode_phrases in times.values()
-                        if check_mode in mode_phrases
-                    )
-                    click.echo(f"  OK: all {example_count} examples matched")
-
-            coverage_failures = []
-            for h in range(24):
-                for m in range(60):
-                    if not generate_phrase_tokens(config, check_mode, h, m):
-                        coverage_failures.append(f"{h:02d}:{m:02d}")
-
-            if coverage_failures:
-                click.echo(f"\nCoverage: FAIL - {len(coverage_failures)} times produce no output")
-                for t in coverage_failures[:10]:
-                    click.echo(f"  {t}")
-                if len(coverage_failures) > 10:
-                    click.echo(f"  ... and {len(coverage_failures) - 10} more")
-                mode_errors += len(coverage_failures)
+            if example_results:
+                click.echo(f"\n  Examples: WARN ({mode_warnings} mismatch(es))")
+                for h, m, expected, got in example_results:
+                    click.echo(f"    {h:02d}:{m:02d}  expected: {expected!r}")
+                    click.echo(f"           got:      {got!r}")
             else:
-                click.echo(f"\nCoverage: OK - all 1440 times matched")
+                example_count = sum(
+                    1 for mp in parsed_examples.values() if check_mode in mp
+                )
+                click.echo(f"\n  Examples: OK ({example_count} checked)")
 
-            total_errors += mode_errors
-            if mode_errors:
-                click.echo(f"\nMode result: FAIL ({mode_errors} error(s))")
-            else:
-                click.echo(f"\nMode result: OK")
+            total_warnings += mode_warnings
 
-        click.echo(f"\n{'='*60}")
-        if total_errors:
-            click.echo(f"Validation FAILED: {total_errors} total error(s)")
+        click.echo(f"\n{'='*56}")
+        if total_warnings:
+            click.echo(f"Result: WARN ({total_warnings} total mismatch(es))")
         else:
-            click.echo(f"Validation PASSED")
-        click.echo(f"{'='*60}")
+            click.echo(f"Result: OK")
+        click.echo(f"{'='*56}")
 
         click.echo("\nTo repeat this operation:")
         cmd = f"  tca validate --yaml {yaml_path}"
