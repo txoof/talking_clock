@@ -37,6 +37,36 @@ def find_model_files(model_dir='./models'):
             if not f.name.endswith('.onnx.json')]
 
 
+def find_audio_dirs(locale, base_dir='./audio'):
+    """Find all generated audio directories for a given locale."""
+    base = Path(base_dir)
+    if not base.exists():
+        return []
+    return sorted(d for d in base.iterdir()
+                  if d.is_dir() and d.name.startswith(locale + '_'))
+
+
+def play_wav_sequence(audio_dir, filenames):
+    """Play a list of WAV filenames from audio_dir in sequence.
+
+    Args:
+        audio_dir: Path to the audio/ subdirectory containing WAV files.
+        filenames: Ordered list of WAV filenames to play.
+    """
+    import sounddevice as sd
+    import soundfile as sf
+
+    audio_dir = Path(audio_dir)
+    for filename in filenames:
+        path = audio_dir / filename
+        if not path.exists():
+            click.echo(f"  [missing: {filename}]")
+            continue
+        data, samplerate = sf.read(str(path), dtype='int16')
+        sd.play(data, samplerate)
+        sd.wait()
+
+
 @click.group()
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
 @click.option('--quiet', '-q', is_flag=True, help='Suppress all output except errors')
@@ -47,8 +77,8 @@ def cli(verbose, quiet):
     Common commands:
       tca list-models --remote              List available voice models
       tca get-model --locale en_US --voice lessac --quality medium
-      tca validate --yaml <file> --mode casual
-      tca generate --yaml <file> --mode casual --model <path>
+      tca validate --yaml <file>
+      tca generate --yaml <file> --model <path>
       tca debug --yaml speaker_test.yaml --model <path>
 
     \b
@@ -239,13 +269,15 @@ def get_model(locale, voice, quality, model_dir):
 @cli.command('validate')
 @click.option('--yaml', 'yaml_path', type=click.Path(exists=True),
               help='Path to time phrase configuration file')
-@click.option('--mode', help='Validate a specific mode only (default: all modes)')
-def validate_config(yaml_path, mode):
+def validate_config(yaml_path):
     """Validate a time phrase configuration and show sample outputs.
 
     Compiles rules from the YAML, generates phrases for a set of sample
     times using the same logic as the Pico, and checks the examples block.
     Mismatches in the examples block are reported as warnings.
+
+    Optionally plays the generated audio sequences if a matching audio
+    directory exists.
 
     \b
     Interactive mode (prompts for missing options):
@@ -254,7 +286,6 @@ def validate_config(yaml_path, mode):
     \b
     Expert mode:
       tca validate --yaml time_phrases_en_US.yaml
-      tca validate --yaml time_phrases_en_US.yaml --mode casual
     """
     from .rules_generator import load_yaml, generate_rules, generate_vocab
     from . import pico_rules
@@ -290,12 +321,6 @@ def validate_config(yaml_path, mode):
         locale = config['locale']
         all_modes = list(config['modes'].keys())
 
-        if mode and mode not in all_modes:
-            click.echo(f"Error: mode '{mode}' not found. Available: {', '.join(all_modes)}", err=True)
-            return
-
-        modes_to_check = [mode] if mode else all_modes
-
         # Compile rules and vocab
         rules_doc = generate_rules(config)
         vocab_map = generate_vocab(config)  # symbolic key -> filename
@@ -329,8 +354,11 @@ def validate_config(yaml_path, mode):
             h, m = (int(x) for x in str(time_key).split(':'))
             parsed_examples[(h, m)] = mode_phrases
 
-        for check_mode in modes_to_check:
-            # Build a per-mode rules doc with just this mode
+        # Collect per-mode sample results for optional playback
+        # { mode_name: [(h, m, label, phrase, [filenames]), ...] }
+        mode_samples = {}
+
+        for check_mode in all_modes:
             mode_rules_doc = {
                 'locale': rules_doc['locale'],
                 'day_period': rules_doc['day_period'],
@@ -343,10 +371,13 @@ def validate_config(yaml_path, mode):
             click.echo(f"  {'Time':<8} {'Label':<12} {'Phrase'}")
             click.echo(f"  {'-'*7} {'-'*11} {'-'*35}")
 
+            samples = []
             for h, m, label in SAMPLE_TIMES:
                 files = pico_rules.get_audio_files(mode_rules_doc, vocab_map, check_mode, h, m)
                 phrase = files_to_spoken(files)
                 click.echo(f"  {h:02d}:{m:02d}  {label:<12} {phrase}")
+                samples.append((h, m, label, phrase, files or []))
+            mode_samples[check_mode] = samples
 
             # Check examples
             mode_warnings = 0
@@ -382,10 +413,56 @@ def validate_config(yaml_path, mode):
         click.echo(f"{'='*56}")
 
         click.echo("\nTo repeat this operation:")
-        cmd = f"  tca validate --yaml {yaml_path}"
-        if mode:
-            cmd += f" --mode {mode}"
-        click.echo(cmd)
+        click.echo(f"  tca validate --yaml {yaml_path}")
+
+        # --- Optional playback ---
+
+        if not questionary.confirm("\nPlay samples?", default=False).ask():
+            return
+
+        audio_dirs = find_audio_dirs(locale)
+        if not audio_dirs:
+            click.echo(f"No generated audio directories found for locale '{locale}'.")
+            click.echo("Run 'tca generate' first.")
+            return
+
+        if len(audio_dirs) == 1:
+            selected_dir = audio_dirs[0]
+        else:
+            selected_dir = questionary.select(
+                "Select audio directory:",
+                choices=[str(d) for d in audio_dirs]
+            ).ask()
+            if not selected_dir:
+                return
+            selected_dir = Path(selected_dir)
+
+        audio_wav_dir = Path(selected_dir) / 'audio'
+        click.echo(f"\nUsing: {selected_dir.name}")
+
+        while True:
+            mode_choice = questionary.select(
+                "Select mode to play:",
+                choices=all_modes + ["quit"]
+            ).ask()
+
+            if not mode_choice or mode_choice == "quit":
+                break
+
+            samples = mode_samples[mode_choice]
+            click.echo(f"\nPlaying mode: {mode_choice}")
+            click.echo("Press Ctrl-C to skip to next sample.\n")
+
+            for h, m, label, phrase, filenames in samples:
+                click.echo(f"  {h:02d}:{m:02d}  {label:<12} {phrase}")
+                if filenames:
+                    try:
+                        play_wav_sequence(audio_wav_dir, filenames)
+                    except KeyboardInterrupt:
+                        click.echo("  (skipped)")
+                        continue
+                else:
+                    click.echo("  (no audio files)")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
