@@ -5,9 +5,9 @@ description: >
 
 vocab:
   words:
-    am: "A Em"
-    pm: "Pea Em"
-    oclock: "o'clock"
+    am: "a.m."
+    pm: "p.m."
+    oclock: "o' clock"
     past: "past"
     to: "to"
     quarter: "quarter"

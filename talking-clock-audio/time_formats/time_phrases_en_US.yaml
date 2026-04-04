@@ -5,9 +5,9 @@ description: >
 
 vocab:
   words:
-    am: "A Em"
-    pm: "Pea Em"
-    oclock: "o'clock"
+    am: "a.m."
+    pm: "p.m."
+    oclock: "o' clock"
     past: "past"
     to: "to"
     quarter: "quarter"
@@ -262,7 +262,7 @@ modes:
 examples:
   "20:48":
     operational: "twenty forty eight hours"
-    broadcast: "eight forty eight p m"
+    broadcast: "eight forty eight p.m."
     standard: "eight forty eight"
     casual: "quarter to nine"
   "08:12":
