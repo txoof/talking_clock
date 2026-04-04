@@ -2,7 +2,22 @@
 
 A command-line tool for generating multilingual time phrase audio files for the Talking Clock project.
 
-This package uses Piper TTS to synthesize spoken time announcements from YAML-defined phrase rules. It produces audio packages ready to deploy to the clock's SD card, along with the compiled rule files the Pico firmware uses to select and sequence audio at runtime.
+This package uses Piper TTS to synthesize s- [Talking Clock Audio](#talking-clock-audio)
+- [Talking Clock Audio](#talking-clock-audio)
+  - [Requirements](#requirements)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+  - [Generating a Voice Package](#generating-a-voice-package)
+  - [Adding a New Language](#adding-a-new-language)
+  - [Building a YAML configuration with an LLM](#building-a-yaml-configuration-with-an-llm)
+  - [Deploying to the Clock](#deploying-to-the-clock)
+  - [CLI Reference](#cli-reference)
+  - [Project Structure](#project-structure)
+  - [Audio Debug Mode](#audio-debug-mode)
+  - [License](#license)
+  - [Contributing](#contributing)
+  - [Acknowledgments](#acknowledgments)
+  - [Support](#support)
 
 ## Requirements
 
@@ -116,8 +131,7 @@ This will copy the appropriate files to the SD card. Make sure the SD card is mo
 tca deploy
 ```
 
-Select `TALK-CLOCK` from the volume list. Select the packages to copy. Insert the SD card
-into the clock.
+Select `TALK-CLOCK` from the volume list. Select the packages to copy. Insert the SD card into the clock.
 
 ## Generating a Voice Package
 
@@ -211,8 +225,7 @@ tca generate --yaml <file> --model <path> --highpass-cutoff 0 --speaker-threshol
 
 **Audio sounds clipped or distorted on the speaker**
 
-Lower the soft limiter threshold. Start at 24000 and work downward until
-clipping disappears:
+Lower the soft limiter threshold. Start at 24000 and work downward until clipping disappears:
 
 ```bash
 tca generate --yaml <file> --model <path> --speaker-threshold 24000
@@ -228,8 +241,7 @@ tca generate --yaml <file> --model <path> --highpass-cutoff 500
 
 **Audio sounds thin or tinny**
 
-Lower the high-pass filter cutoff, or disable it entirely if your speaker
-handles bass well:
+Lower the high-pass filter cutoff, or disable it entirely if your speaker handles bass well:
 
 ```bash
 tca generate --yaml <file> --model <path> --highpass-cutoff 150
@@ -241,8 +253,7 @@ The speaker in the clock enclosure may have different characteristics than your 
 
 ### Validate a package
 
-After generating, run validate to confirm that the compiled rules produce
-the expected spoken phrases:
+After generating, run validate to confirm that the compiled rules produce the expected spoken phrases:
 
 ```bash
 tca validate --yaml time_phrases_en_US.yaml
@@ -336,9 +347,7 @@ The prompt is in [`LOCALE_BUILDER_PROMPT.md`](./LOCALE_BUILDER_PROMPT.md). It wa
 - casual mode minute boundaries
 - the `examples:` block needed for `tca validate`
 
-The prompt is designed to be set as a **system prompt** rather than pasted as
-a regular message. See `LOCALE_BUILDER_PROMPT.md` for setup instructions for
-ChatGPT, Claude, and local LLMs.
+The prompt is designed to be set as a **system prompt** rather than pasted as a regular message. See `LOCALE_BUILDER_PROMPT.md` for setup instructions for ChatGPT, Claude, and local LLMs.
 
 After the LLM produces a YAML file, always run:
 
@@ -346,9 +355,7 @@ After the LLM produces a YAML file, always run:
 tca validate --yaml time_phrases_LOCALE.yaml
 ```
 
-LLMs occasionally make errors in the `minute_map` or get casual mode
-conventions wrong for languages with non-obvious conventions. The validate
-command will catch these before you generate audio.
+LLMs occasionally make errors in the `minute_map` or get casual mode conventions wrong for languages with non-obvious conventions. The validate command will catch these before you generate audio.
 
 ## Deploying to the Clock
 
@@ -556,41 +563,32 @@ tca debug --yaml tests/speaker_test.yaml --model <path> --force
 ## Project Structure
 
 ```text
-.
-├── audio
-│   ├── debug
-│   ├── en_GB_alan_medium
-│   ├── en_US_amy_medium
-│   ├── en_US_lessac_medium
-│   ├── en_US_libritts_high
-│   ├── nl_NL_alex_medium
-│   └── nl_NL_pim_medium
-├── build
-│   ├── bdist.macosx-14.5-arm64
-│   └── lib
-├── LOCALE_BUILDER_PROMPT.md
-├── models
-│   ├── en
-│   └── nl
-├── pyproject.toml
-├── README.md
-├── src
-│   ├── talking_clock_audio
-│   └── talking_clock_audio.egg-info
-├── tests
-│   ├── __pycache__
-│   ├── sd_mock
-│   ├── speaker_test.yaml
-│   ├── test_phrase_generator.py
-│   ├── test_rules.py
-│   ├── test_voice_manager.py
-│   └── test_voice_scan.py
-├── time_format_prompt.md
-├── time_formats
-│   ├── time_phrases_en_GB.yaml
-│   ├── time_phrases_en_US.yaml
-│   └── time_phrases_nl_NL.yaml
-└── time_phrases_template.yaml
+talking-clock-audio/
+  src/
+    talking_clock_audio/
+      __init__.py              # package initialisation and logging setup
+      cli.py                   # command-line interface (tca commands)
+      deploy.py                # SD card deployment logic
+      tts_generator.py         # Piper TTS audio generation and speaker processing
+      rules_generator.py       # compiles locale YAML into runtime JSON rule files
+      phrase_generator.py      # evaluates compiled rules to produce audio sequences
+      pico_rules.py            # on-device rule evaluation (also used by validate)
+      debug_generator.py       # speaker test audio generation
+      voice_manager.py         # Hugging Face voice model listing and download
+  tests/
+    speaker_test.yaml          # default debug configuration
+    test_phrase_generator.py
+    test_rules.py
+    test_voice_manager.py
+    test_voice_scan.py
+  time_formats/
+    time_phrases_en_GB.yaml    # British English locale configuration
+    time_phrases_en_US.yaml    # American English locale configuration
+    time_phrases_nl_NL.yaml    # Dutch locale configuration
+  time_phrases_template.yaml   # template for adding a new language
+  LOCALE_BUILDER_PROMPT.md     # LLM system prompt for building locale YAML files
+  pyproject.toml               # package configuration and dependencies
+  README.md                    # this file
 ```
 
 ## Audio Debug Mode
