@@ -7,15 +7,29 @@
 #   C: representative clock output, easier phonemes, volume reference
 #   D: isolated diphthong + final fricative stress test
 #
-# Variants cover a grid of highpass cutoff x soft limiter threshold.
-# Higher cutoffs (700-1200Hz) suit small cones with limited low-frequency
-# response. Higher thresholds (24000) suit 8-ohm speakers which draw less
-# power from the MAX98357A. No-limiter variants isolate the filter effect.
+# HARDWARE NOTE:
+# The MAX98357A SD pin must be driven high explicitly (e.g. GP9 -> SD).
+# A floating SD pin causes the amp to randomly enter and exit shutdown,
+# producing pops and crackle that mimic speaker or DSP problems. This was
+# the root cause of audio artifacts observed during initial testing.
+# The speaker enclosure also has a significant effect on audio quality -
+# test in the final enclosure before tuning filter parameters.
+#
+# RECOMMENDED BASELINE: no_filter_t24000
+# With SD pin driven high and speaker properly enclosed, no highpass filter
+# is needed. The soft limiter at 24000 is retained as a safety net against
+# occasional hot peaks from Piper TTS. Highpass cutoff variants are retained
+# for reference and for testing speakers outside of an enclosure.
+#
+# Note: highpass cutoffs above 500Hz cause "th" fricatives to drift towards
+# "f", which is unacceptable for a speech intelligibility device.
 
 sentences:
   - "Three, thirteen, thirty, three thirty"
   - "Eight, eighteen, eighty eight"
   - "It is half past seven in the evening"
+  - "Five fifteen p.m."
+  - "Six forty eight a.m."
   - "South, mouth, fourth, fifth"
 
 variants:
