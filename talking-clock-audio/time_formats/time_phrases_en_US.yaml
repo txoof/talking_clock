@@ -1,14 +1,13 @@
 locale: en_US
 description: >
-  American English time phrases with four standardized output modes.
-  Audio generation will automatically deduplicate vocab entries with identical text
-  (case-insensitive comparison, but whitespace and punctuation are preserved).
+  American English time phrases.
+  Source YAML for compiling locale-specific Pico rule files.
 
 vocab:
   words:
     am: "a.m."
     pm: "p.m."
-    oclock: "o'clock"
+    oclock: "o' clock"
     past: "past"
     to: "to"
     quarter: "quarter"
@@ -19,6 +18,36 @@ vocab:
     hours: "hours"
     midnight: "midnight"
     noon: "noon"
+    almost: "almost"
+
+  menu:
+    enter: "settings"
+    exit: "done"
+    set_time: "set time"
+    set_alarm: "set alarm"
+    alarm_enabled: "enable alarm"
+    alarm_tone: "alarm tone"
+    voice: "voice"
+    announce_interval: "announcement interval"
+    mode: "time format"
+
+  toggle:
+    on: "on"
+    off: "off"
+
+  interval:
+    hourly: "every hour"
+    half: "every half hour"
+    quarter: "every quarter hour"
+
+  voice:
+    name: "U.S. English"
+
+  mode:
+    operational: "operational"
+    broadcast: "broadcast"
+    standard: "standard"
+    casual: "casual"
 
   number_words:
     0: "zero"
@@ -84,200 +113,161 @@ vocab:
 
 fields:
   computed:
-    hour_24_word: "number_words[hour_24]"
-    minute_word: "number_words[minute]"
-    hour_12: "((hour_24 + 11) mod 12) + 1"
-    hour_12_word: "number_words[hour_12]"
-    next_hour_12: "(hour_12 mod 12) + 1"
-    next_hour_12_word: "number_words[next_hour_12]"
-    minute_to_next: "60 - minute"
-    minute_to_next_word: "number_words[minute_to_next]"
+    h12: "((hour_24 + 11) % 12) + 1"
+    next_h12: "(h12 % 12) + 1"
+    m_to: "60 - minute"
     day_period:
       when_hour_24_lt_12: "am"
       otherwise: "pm"
-    day_period_word: "words[day_period]"
 
 modes:
   operational:
-    rule_order: ["on_the_hour", "minute_lt_10", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      hundred_hours: ["number_words.{hour_24}", "words.hundred", "words.hours"]
+      zero_pad: ["number_words.{hour_24}", "words.zero", "number_words.{minute}", "words.hours"]
+      full: ["number_words.{hour_24}", "number_words.{minute}", "words.hours"]
+
     rules:
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_24_word}", "{hundred}", "{hours}"]
-      minute_lt_10:
-        when: {minute_lt: 10, minute_gt: 0}
-        tokens: ["{hour_24_word}", "{zero}", "{minute_word}", "{hours}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_24_word}", "{minute_word}", "{hours}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: hundred_hours
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   broadcast:
-    rule_order: ["midnight", "noon", "oclock", "minute_lt_10", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock", "words.{period}"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{minute}", "words.{period}"]
+      full: ["number_words.{h12}", "number_words.{minute}", "words.{period}"]
+
     rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{midnight}"]
-      noon:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{noon}"]
-      oclock:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{oclock}", "{day_period_word}"]
-      minute_lt_10:
-        when: {minute_lt: 10, minute_gt: 0}
-        tokens: ["{hour_12_word}", "{oh}", "{minute_word}", "{day_period_word}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_12_word}", "{minute_word}", "{day_period_word}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   standard:
-    rule_order: ["midnight", "noon", "oclock", "minute_lt_10", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{minute}"]
+      full: ["number_words.{h12}", "number_words.{minute}"]
+
     rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{midnight}"]
-      noon:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{noon}"]
-      oclock:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{oclock}"]
-      minute_lt_10:
-        when: {minute_lt: 10, minute_gt: 0}
-        tokens: ["{hour_12_word}", "{oh}", "{minute_word}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_12_word}", "{minute_word}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   casual:
-    rule_order: [
-      "midnight",
-      "noon",
-      "oclock",
-      "quarter_past",
-      "half_past",
-      "quarter_to",
-      "minutes_past",
-      "minutes_to"
-    ]
-    rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{midnight}"]
-      noon:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{noon}"]
-      oclock:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{oclock}"]
-      quarter_past:
-        when: {minute_eq: 15}
-        tokens: ["{quarter}", "{past}", "{hour_12_word}"]
-      half_past:
-        when: {minute_eq: 30}
-        tokens: ["{half}", "{past}", "{hour_12_word}"]
-      quarter_to:
-        when: {minute_eq: 45}
-        tokens: ["{quarter}", "{to}", "{next_hour_12_word}"]
-      minutes_past:
-        when: {minute_lt: 30, minute_gt: 0}
-        tokens: ["{minute_word}", "{past}", "{hour_12_word}"]
-      minutes_to:
-        when: {minute_gt: 30}
-        tokens: ["{minute_to_next_word}", "{to}", "{next_hour_12_word}"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      minutes_past: ["number_words.{minute}", "words.past", "number_words.{h12}"]
+      quarter_past: ["words.quarter", "words.past", "number_words.{h12}"]
+      half_past: ["words.half", "words.past", "number_words.{h12}"]
+      minutes_to: ["number_words.{m_to}", "words.to", "number_words.{next_h12}"]
+      quarter_to: ["words.quarter", "words.to", "number_words.{next_h12}"]
+      almost: ["words.almost", "number_words.{next_h12}"]
 
-rendered_examples:
-  midnight:
-    00:00:
-      operational: "zero hundred hours"
-      broadcast: "midnight"
-      standard: "midnight"
-      casual: "midnight"
+    special_cases:
+      "00:00": midnight
+      "12:00": noon
 
-  morning:
-    11:00:
-      operational: "eleven hundred hours"
-      broadcast: "eleven o'clock a.m."
-      standard: "eleven o'clock"
-      casual: "eleven o'clock"
-    
-    11:01:
-      operational: "eleven zero one hours"
-      broadcast: "eleven oh one a.m."
-      standard: "eleven oh one"
-      casual: "one past eleven"
-    
-    11:07:
-      operational: "eleven zero seven hours"
-      broadcast: "eleven oh seven a.m."
-      standard: "eleven oh seven"
-      casual: "seven past eleven"
-    
-    11:15:
-      operational: "eleven fifteen hours"
-      broadcast: "eleven fifteen a.m."
-      standard: "eleven fifteen"
-      casual: "quarter past eleven"
-    
-    11:30:
-      operational: "eleven thirty hours"
-      broadcast: "eleven thirty a.m."
-      standard: "eleven thirty"
-      casual: "half past eleven"
-    
-    11:45:
-      operational: "eleven forty five hours"
-      broadcast: "eleven forty five a.m."
-      standard: "eleven forty five"
-      casual: "quarter to twelve"
-    
-    11:53:
-      operational: "eleven fifty three hours"
-      broadcast: "eleven fifty three a.m."
-      standard: "eleven fifty three"
-      casual: "seven to twelve"
+    minute_map:
+      0: oclock
+      1: oclock
+      2: oclock
+      3: minutes_past
+      4: minutes_past
+      5: minutes_past
+      6: minutes_past
+      7: minutes_past
+      8: quarter_past
+      9: quarter_past
+      10: quarter_past
+      11: quarter_past
+      12: quarter_past
+      13: quarter_past
+      14: quarter_past
+      15: quarter_past
+      16: quarter_past
+      17: quarter_past
+      18: minutes_past
+      19: minutes_past
+      20: minutes_past
+      21: minutes_past
+      22: half_past
+      23: half_past
+      24: half_past
+      25: half_past
+      26: half_past
+      27: half_past
+      28: half_past
+      29: half_past
+      30: half_past
+      31: half_past
+      32: half_past
+      33: half_past
+      34: half_past
+      35: half_past
+      36: half_past
+      37: half_past
+      38: minutes_to
+      39: minutes_to
+      40: minutes_to
+      41: minutes_to
+      42: minutes_to
+      43: quarter_to
+      44: quarter_to
+      45: quarter_to
+      46: quarter_to
+      47: quarter_to
+      48: quarter_to
+      49: quarter_to
+      50: minutes_to
+      51: minutes_to
+      52: minutes_to
+      53: minutes_to
+      54: minutes_to
+      55: almost
+      56: almost
+      57: almost
+      58: almost
+      59: almost
 
-  noon:
-    12:00:
-      operational: "twelve hundred hours"
-      broadcast: "noon"
-      standard: "noon"
-      casual: "noon"
-    
-    12:30:
-      operational: "twelve thirty hours"
-      broadcast: "twelve thirty p.m."
-      standard: "twelve thirty"
-      casual: "half past twelve"
-
-  afternoon:
-    13:00:
-      operational: "thirteen hundred hours"
-      broadcast: "one o'clock p.m."
-      standard: "one o'clock"
-      casual: "one o'clock"
-    
-    13:30:
-      operational: "thirteen thirty hours"
-      broadcast: "one thirty p.m."
-      standard: "one thirty"
-      casual: "half past one"
-    
-    13:45:
-      operational: "thirteen forty five hours"
-      broadcast: "one forty five p.m."
-      standard: "one forty five"
-      casual: "quarter to two"
-
-  evening:
-    23:00:
-      operational: "twenty three hundred hours"
-      broadcast: "eleven o'clock p.m."
-      standard: "eleven o'clock"
-      casual: "eleven o'clock"
-    
-    23:07:
-      operational: "twenty three zero seven hours"
-      broadcast: "eleven oh seven p.m."
-      standard: "eleven oh seven"
-      casual: "seven past eleven"
+examples:
+  "20:48":
+    operational: "twenty forty eight hours"
+    broadcast: "eight forty eight p.m."
+    standard: "eight forty eight"
+    casual: "quarter to nine"
+  "08:12":
+    casual: "quarter past eight"
+  "08:25":
+    casual: "half past eight"
+  "08:56":
+    casual: "almost nine"

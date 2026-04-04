@@ -1,0 +1,10 @@
+{
+  "locale": "en_GB",
+  "voice": "alan",
+  "quality": "medium",
+  "model": "en_GB-alan-medium.onnx",
+  "highpass_cutoff": null,
+  "speaker_threshold": 24000,
+  "generated_at": "2026-04-04T12:22:57",
+  "tca_version": "0.2.0"
+}

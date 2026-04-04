@@ -1,0 +1,59 @@
+{
+  "items": [
+    {
+      "id": "set_time",
+      "audio_token": "menu.set_time",
+      "type": "action",
+      "action": "set_time"
+    },
+    {
+      "id": "set_alarm",
+      "audio_token": "menu.set_alarm",
+      "type": "action",
+      "action": "set_alarm"
+    },
+    {
+      "id": "alarm_enabled",
+      "audio_token": "menu.alarm_enabled",
+      "type": "toggle",
+      "config_key": "alarm_enabled",
+      "options": [
+        { "value": false, "audio_token": "toggle.False" },
+        { "value": true,  "audio_token": "toggle.True"  }
+      ]
+    },
+    {
+      "id": "alarm_tone",
+      "audio_token": "menu.alarm_tone",
+      "type": "toggle",
+      "config_key": "alarm_tone",
+      "options": []
+    },
+    {
+      "id": "announce_interval",
+      "audio_token": "menu.announce_interval",
+      "type": "toggle",
+      "config_key": "announce_interval",
+      "options": [
+        { "value": "off",     "audio_token": "toggle.False"     },
+        { "value": "hourly",  "audio_token": "interval.hourly"  },
+        { "value": "half",    "audio_token": "interval.half"    },
+        { "value": "quarter", "audio_token": "interval.quarter" }
+      ]
+    },
+    {
+      "id": "mode",
+      "audio_token": "menu.mode",
+      "type": "toggle",
+      "config_key": "mode",
+      "options": []
+    },
+    {
+      "id": "voice",
+      "audio_token": "menu.voice",
+      "type": "toggle",
+      "config_key": "voice",
+      "options": []
+    }
+  ]
+}

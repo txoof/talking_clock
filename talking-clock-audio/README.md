@@ -1,773 +1,715 @@
-# Adding a New Language to Talking Clock Audio
+# Talking Clock Audio
 
-This guide walks you through creating a complete time phrase configuration for a new language.
+A command-line tool for generating multilingual time phrase audio files for the Talking Clock project.
 
-## Overview
+- [Talking Clock Audio](#talking-clock-audio)
+  - [Requirements](#requirements)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+  - [Generating a Voice Package](#generating-a-voice-package)
+  - [Audio Sample Requirements](#audio-sample-requirements)
+  - [Adding a New Language](#adding-a-new-language)
+  - [Building a YAML configuration with an LLM](#building-a-yaml-configuration-with-an-llm)
+  - [Deploying to the Clock](#deploying-to-the-clock)
+  - [CLI Reference](#cli-reference)
+  - [Project Structure](#project-structure)
+  - [Audio Debug Mode](#audio-debug-mode)
+  - [License](#license)
+  - [Contributing](#contributing)
+  - [Acknowledgments](#acknowledgments)
+  - [Support](#support)
 
-To add support for a new language, you'll need to:
+This package uses Piper TTS to synthesize spoken time announcements from YAML-defined phrase rules. It produces audio packages ready to deploy to the clock's SD card, along with the compiled rule files the Pico firmware uses to select and sequence audio at runtime.
 
-1. Create a YAML configuration file defining time phrases
-2. Test the configuration with the CLI
-3. Generate audio files using a Piper TTS voice model
+## Requirements
 
-## Prerequisites
+- Python 3.11 or 3.12 (Python 3.14 not yet supported by piper-tts)
+- piper-tts
+- huggingface-hub
+- pyyaml
+- click
+- questionary
+- pycountry
 
+See `pyproject.toml` for the complete dependency list.
 
-- Talking Clock Audio installed 
-- Basic understanding of how time is spoken in your target language
-- A Piper TTS voice model for your language (see Finding Voice Models below)
+## Installation
 
-## Step 0: Setup Environment
-
-- Clone this repository locally
-- OPTIONAL: Create a virtual environment
-- Install requirements file `pip install -r requirements.txt`
-- Install Talking Clock into the Python Environment: `pip install -e .` from this directory
-
-## Step 1: Find Available Voice Models
-
-First, check if Piper has voice models for your target language:
+Install the talking clock audio (`tca`) command in a local virtual environment.
 
 ```bash
-tca list-models --remote | grep -i "your_language"
+git clone https://github.com/txoof/talking-clock.git
+cd talking-clock/talking-clock-audio
+python -m venv venv
+source venv/bin/activate
+pip install -e .
 ```
 
-Example for German:
+## Quick Start
+
+The minimal path from a fresh install to deploying audio on the clock's SD card.
+
+This walkthrough uses the english US (`en_US`) "lessac" voice as an example. Substitute your preferred locale and voice as needed.
+
+### 1. Download a voice model
+
+**List Available Models on Hugging Face**
 
 ```bash
-tca list-models --remote | grep -i german
+$ tca list-models --remote | less
+
+Found 152 voices in 45 locales:
+
+ar_JO - Arabic (Jordan):
+  ar_JO/kareem/low
+  ar_JO/kareem/medium
+
+bg_BG - Bulgarian (Bulgaria):
+  bg_BG/dimitar/medium
+
+...
+en_GB - English (United Kingdom):
+  en_GB/alan/low
+  en_GB/alan/medium
+  en_GB/alba/medium
+  en_GB/aru/medium
+  en_GB/cori/high
+  en_GB/cori/medium
+  en_GB/jenny_dioco/medium
+  en_GB/northern_english_male/medium
+  en_GB/semaine/medium
+  en_GB/southern_english_female/low
+  en_GB/vctk/medium
+
+en_US - English (United States):
+  en_US/amy/low
+  en_US/amy/medium
+  en_US/arctic/medium
+  en_US/bryce/medium
+  en_US/lessac/high
+  en_US/lessac/low
+  en_US/lessac/medium
+  en_US/libritts/high
+  en_US/libritts_r/medium
+  en_US/sam/medium
+...
 ```
 
-Output shows available models:
-
-```
-de_DE - German (Germany):
-  de_DE/thorsten/high
-  de_DE/thorsten/medium
-  de_DE/thorsten/low
-```
-
-Choose the highest quality model available (e.g. `de_DE/thorsten/high`)
-
-If your language isn't available, you may need to use a different TTS system or train your own model.
-
-## Step 2: Create the YAML Configuration File
-
-A YAML file is required to indicate the rules for telling time in your language. Many languages have several "modes" for telling time:
-
-- operational: Extremely formal and rule driven. This is typically used by the military, pilots and law enforcement
-- broadcast: Formal and standardized way of communicating time in news casts, train stations and airports.
-- standard: Formal and structured, but used by common people in the streets and offices.
-- informal: Very casual and used among friends and family and typically less precise (e.g. 13:47 becomes "A quarter to two")
-
-Create a new file: `time_formats/time_phrases_{locale}.yaml`
-
-Example: `time_formats/time_phrases_de_DE.yaml` for German
-
-### Optional LLM (Chat GPT) Configuration
-
-Building the yaml file can be difficult. There is a [time_format_prompt.md](./time_format_prompt.md) that can be fed directly into your favorite Large Language Model (Chat GPT, Claude, etc.) and used as a way to build the yaml file by answering questions and providing examples.  This isn't guaranteed to work, but it may get you started.
-
-Download the markdown file, and paste the text exactly as it is into the LLM and start answering questions. 
-
-### File Structure
-
-```yaml
-locale: de_DE
-description: >
-  German time phrases with four standardized output modes.
-  Audio generation will automatically deduplicate vocab entries with identical text
-  (case-insensitive comparison, but whitespace and punctuation are preserved).
-
-vocab:
-  words:
-    # Common time-related words
-    uhr: "Uhr"
-    nach: "nach"
-    vor: "vor"
-    
-  number_words:
-    # All hours (0-23) and minutes (0-59)
-    0: "null"
-    1: "eins"
-    2: "zwei"
-    # ... continue for all numbers 0-59
-
-fields:
-  computed:
-    # Computed values used in rules
-    hour_24_word: "number_words[hour_24]"
-    minute_word: "number_words[minute]"
-    hour_12: "((hour_24 + 11) mod 12) + 1"
-    hour_12_word: "number_words[hour_12]"
-
-modes:
-  operational:
-    # Military/radio precision
-    rule_order: ["on_the_hour", "hour_minute"]
-    rules:
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_24_word}", "{uhr}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_24_word}", "{uhr}", "{minute_word}"]
-  
-  broadcast:
-    # News/announcements
-    # ... define rules
-  
-  standard:
-    # Professional/office
-    # ... define rules
-  
-  casual:
-    # Conversational
-    # ... define rules
-
-rendered_examples:
-  # Include examples to document expected output
-  midnight:
-    00:00:
-      operational: "null Uhr"
-      broadcast: "null Uhr"
-      standard: "Mitternacht"
-      casual: "Mitternacht"
-```
-
-### Understanding the YAML Sections
-
-#### vocab.words
-
-Define common words used in time expressions:
-
-- Time markers: "o'clock", "past", "to", "half", "quarter"
-- Day periods: "a.m.", "p.m.", "morning", "afternoon", "evening", "night"
-- Special cases: "midnight", "noon"
-
-Words can have multiple variants for random selection:
-
-```yaml
-to: 
-  - "to"
-  - "till"
-  - "until"
-```
-
-#### vocab.number_words
-
-Define ALL numbers from 0-59. These are used for hours and minutes.
-
-Important: Include special cases for your language:
-
-- Compound numbers (e.g., "twenty one" vs "twentyone")
-- Language-specific rules (e.g., Dutch "drieëntwintig" with diacritics)
-- Zero variations (some languages use different words for "zero" vs "oh")
-
-#### fields.computed
-
-Define computed values derived from the base `hour_24` (0-23) and `minute` (0-59) inputs.
-
-Common computed fields:
-
-```yaml
-fields:
-  computed:
-    # Direct lookups
-    hour_24_word: "number_words[hour_24]"
-    minute_word: "number_words[minute]"
-    
-    # Convert 24h to 12h format
-    hour_12: "((hour_24 + 11) mod 12) + 1"
-    hour_12_word: "number_words[hour_12]"
-    
-    # For "to" phrases (e.g., "ten to three")
-    next_hour_12: "(hour_12 mod 12) + 1"
-    next_hour_12_word: "number_words[next_hour_12]"
-    minute_to_next: "60 - minute"
-    minute_to_next_word: "number_words[minute_to_next]"
-    
-    # Day period (AM/PM or language equivalent)
-    day_period:
-      when_hour_24_lt_12: "am"
-      otherwise: "pm"
-    day_period_word: "words[day_period]"
-```
-
-Special case: Languages where "half" means "halfway to next hour":
-
-```yaml
-# Dutch: "half twee" = 1:30 (halfway to 2:00)
-next_hour_12: "(hour_12 mod 12) + 1"
-next_hour_12_word: "number_words[next_hour_12]"
-```
-
-#### modes
-
-Define the four standard speaking modes. Each mode has rules that match specific times.
-
-**Mode definitions:**
-
-- **operational**: Military/radio precision with maximum clarity
-- **broadcast**: News/announcements, clear and formal
-- **standard**: Professional/office use, natural but precise
-- **casual**: Conversational, uses relative phrases
-
-**Rule structure:**
-
-```yaml
-modes:
-  casual:
-    rule_order: ["midnight", "half_past", "quarter_past", "default"]
-    rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{midnight}"]
-      
-      half_past:
-        when: {minute_eq: 30}
-        tokens: ["{half}", "{past}", "{hour_12_word}"]
-      
-      quarter_past:
-        when: {minute_eq: 15}
-        tokens: ["{quarter}", "{past}", "{hour_12_word}"]
-      
-      default:
-        when: {any: true}
-        tokens: ["{hour_12_word}", "{minute_word}"]
-```
-
-**Rule matching:**
-
-Rules are evaluated in the order specified by `rule_order`. The first matching rule wins.
-
-**Condition operators:**
-
-- `minute_eq: 30` - minute equals 30
-- `minute_lt: 10` - minute less than 10
-- `minute_gt: 30` - minute greater than 30
-- `minute_lte: 30` - minute less than or equal to 30
-- `minute_gte: 30` - minute greater than or equal to 30
-- `hour_24_eq: 0` - hour equals 0
-- `any: true` - always matches (use as fallback)
-
-Multiple conditions in one rule create AND logic (all must match):
-
-```yaml
-midnight:
-  when: {hour_24_eq: 0, minute_eq: 0}  # Both must be true
-  tokens: ["{midnight}"]
-```
-
-**Token expansion:**
-
-Tokens in curly braces reference computed fields:
-
-- `{hour_12_word}` → looks up computed field `hour_12_word` → returns vocab reference
-- `{midnight}` → direct word reference
-- Literal words without braces: `past` → `words.past`
-
-#### rendered_examples
-
-Document expected outputs for validation. Include examples for:
-
-- Midnight (00:00)
-- Morning times (before noon)
-- Noon (12:00)
-- Afternoon times
-- Evening times
-
-Example:
-
-```yaml
-rendered_examples:
-  midnight:
-    00:00:
-      operational: "null Uhr"
-      broadcast: "Mitternacht"
-      standard: "Mitternacht"
-      casual: "Mitternacht"
-  
-  morning:
-    11:30:
-      operational: "elf Uhr dreißig"
-      broadcast: "elf Uhr dreißig"
-      standard: "halb zwölf"
-      casual: "halb zwölf"
-```
-
-## Step 3: Test Your Configuration
-
-Validate the configuration and preview sample phrases:
+**Download and Cache a Model**
 
 ```bash
-tca validate time_formats/time_phrases_de_DE.yaml casual
+tca get-model --locale en_US --voice lessac --quality medium
 ```
 
-This shows:
+The files are cached in `./models`.
 
-- Available modes in the file
-- Number of unique audio files needed
-- Sample time phrases for the selected mode
+### 2. Generate the audio package
 
-Example output:
-
-```
-Loaded configuration: de_DE
-Available modes: operational, broadcast, standard, casual
-
-Vocabulary: 73 unique audio files needed
-
-Sample phrases for mode 'casual':
-  00:00 (midnight    ): Mitternacht
-  06:00 (early morning): sechs Uhr
-  11:30 (late morning ): halb zwölf
-  12:00 (noon        ): Mittag
-  13:45 (afternoon   ): Viertel vor zwei
-  18:30 (evening     ): halb sieben
-  23:00 (late night  ): elf Uhr
-
-Configuration is valid!
-```
-
-Fix any errors before proceeding to audio generation.
-
-## Step 4: Download Voice Model
-
-Find and download a voice model for your language:
+This will generate `.wav` files using the selected voice model.
 
 ```bash
-# List available models
-tca list-models --remote | grep -i german
-
-# Download a specific model
-tca get-model de_DE/thorsten/medium
+tca generate --yaml time_phrases_en_US.yaml --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx
 ```
 
-The model downloads to `./models/de/de_DE/thorsten/medium/`
+### 3. Validate the output
 
-## Step 5: Generate Audio Files
-
-Generate the complete audio package:
+This step displays some time phrases in using the defined rules allowing a visual and audio verification that the rules have been applied correctly.
 
 ```bash
-tca generate time_formats/time_phrases_de_DE.yaml casual \
-  --model ./models/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+tca validate --yaml time_phrases_en_US.yaml
 ```
 
-This creates:
+Review the sample phrases for each mode. Check that the `Examples: OK` line appears for all modes.
 
-```
-audio/de_DE_thorsten_medium_casual/
-  config.json
-  audio/
-    word_uhr.wav
-    word_nach.wav
-    number_null.wav
-    number_eins.wav
-    ... (all vocab files)
-```
+### 4. Prepare the SD card
 
-Generation takes 2-5 minutes depending on vocabulary size.
+Use an SD card with at least 1GB of storage. Format the SD card as FAT32 and set the volume label to `TALK-CLOCK`. The volume lable is not required, but makes deploying easier.
 
-## Step 6: Test the Generated Package
+### 5. Deploy audio to the clock
 
-Verify the audio package works correctly:
-
-```python
-from talking_clock_audio.pico_audio import get_audio_files_for_time
-
-# Test various times
-times = [(0, 0), (11, 30), (13, 45), (23, 0)]
-
-for hour, minute in times:
-    files = get_audio_files_for_time(
-        'audio/de_DE_thorsten_medium_casual/config.json',
-        hour,
-        minute
-    )
-    print(f"{hour:02d}:{minute:02d} -> {files}")
-```
-
-## Complete Example: Adding German
-
-Here's a minimal but complete German configuration:
-
-```yaml
-locale: de_DE
-description: German time phrases
-
-vocab:
-  words:
-    uhr: "Uhr"
-    nach: "nach"
-    vor: "vor"
-    halb: "halb"
-    viertel: "Viertel"
-    mitternacht: "Mitternacht"
-    mittag: "Mittag"
-
-  number_words:
-    0: "null"
-    1: "eins"
-    2: "zwei"
-    3: "drei"
-    4: "vier"
-    5: "fünf"
-    6: "sechs"
-    7: "sieben"
-    8: "acht"
-    9: "neun"
-    10: "zehn"
-    11: "elf"
-    12: "zwölf"
-    13: "dreizehn"
-    14: "vierzehn"
-    15: "fünfzehn"
-    16: "sechzehn"
-    17: "siebzehn"
-    18: "achtzehn"
-    19: "neunzehn"
-    20: "zwanzig"
-    21: "einundzwanzig"
-    # ... continue through 59
-
-fields:
-  computed:
-    hour_24_word: "number_words[hour_24]"
-    minute_word: "number_words[minute]"
-    hour_12: "((hour_24 + 11) mod 12) + 1"
-    hour_12_word: "number_words[hour_12]"
-    next_hour_12: "(hour_12 mod 12) + 1"
-    next_hour_12_word: "number_words[next_hour_12]"
-
-modes:
-  operational:
-    rule_order: ["on_the_hour", "hour_minute"]
-    rules:
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_24_word}", "{uhr}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_24_word}", "{uhr}", "{minute_word}"]
-
-  casual:
-    rule_order: ["midnight", "noon", "on_the_hour", "half_hour", "quarter_past", "default"]
-    rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{mitternacht}"]
-      noon:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{mittag}"]
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{uhr}"]
-      half_hour:
-        when: {minute_eq: 30}
-        tokens: ["{halb}", "{next_hour_12_word}"]
-      quarter_past:
-        when: {minute_eq: 15}
-        tokens: ["{viertel}", "{nach}", "{hour_12_word}"]
-      default:
-        when: {any: true}
-        tokens: ["{hour_12_word}", "{uhr}", "{minute_word}"]
-
-rendered_examples:
-  midnight:
-    00:00:
-      operational: "null Uhr"
-      casual: "Mitternacht"
-  
-  morning:
-    11:30:
-      operational: "elf Uhr dreißig"
-      casual: "halb zwölf"
-```
-
-## Common Patterns and Tips
-
-### Pattern 1: Languages with "half to next hour"
-
-Dutch and German use "half" to mean halfway TO the next hour:
-
-- Dutch: "half twee" = 1:30 (halfway to 2:00)
-- German: "halb zwölf" = 11:30 (halfway to 12:00)
-
-Use the `next_hour_12_word` computed field:
-
-```yaml
-half_hour:
-  when: {minute_eq: 30}
-  tokens: ["{half}", "{next_hour_12_word}"]
-```
-
-### Pattern 2: Time of day markers
-
-Many languages have context-specific day markers:
-
-Dutch example:
-
-```yaml
-fields:
-  computed:
-    day_period:
-      when_hour_24_lt_6: "nachts"      # 00:00-05:59
-      when_hour_24_lt_12: "ochtends"   # 06:00-11:59
-      when_hour_24_lt_18: "middags"    # 12:00-17:59
-      otherwise: "avonds"               # 18:00-23:59
-    day_period_word: "words[day_period]"
-
-# Then use in rules:
-standard_with_period:
-  when: {any: true}
-  tokens: ["{hour_12_word}", "{uhr}", "{minute_word}", "{day_period_word}"]
-```
-
-### Pattern 3: Leading zeros in formal speech
-
-Some languages speak leading zeros differently:
-
-```yaml
-operational:
-  rule_order: ["on_the_hour", "minute_lt_10", "hour_minute"]
-  rules:
-    minute_lt_10:
-      when: {minute_lt: 10, minute_gt: 0}
-      tokens: ["{hour_24_word}", "{null}", "{minute_word}"]
-    # This produces "elf null sieben" for 11:07
-```
-
-### Pattern 4: Special vocabulary needs
-
-Add words to vocab if they're used in multiple contexts:
-
-```yaml
-vocab:
-  words:
-    # Add "zero" or "null" if used as a filler word
-    null: "null"
-    
-    # Add "twelve" if used differently than number_words[12]
-    twelve: "zwölf"
-```
-
-### Pattern 5: Compound numbers
-
-For languages with compound number words:
-
-```yaml
-number_words:
-  21: "einundzwanzig"    # German: one-and-twenty
-  22: "tweeëntwintig"    # Dutch: with diacritics
-  30: "dertig"           # Dutch: not "drie-tig"
-```
-
-## Step 7: Validate Your Configuration
-
-Test with different modes:
+This will copy the appropriate files to the SD card. Make sure the SD card is mounted and available.
 
 ```bash
-# Test casual mode
-tca validate time_formats/time_phrases_de_DE.yaml casual
-
-# Test operational mode
-tca validate time_formats/time_phrases_de_DE.yaml operational
-
-# Test with more samples
-tca validate time_formats/time_phrases_de_DE.yaml casual --samples 7
+tca deploy
 ```
 
-Common validation errors:
+Select `TALK-CLOCK` from the volume list. Select the packages to copy. Insert the SD card into the clock.
 
-**Error: "KeyError: 'words.something'"**
+## Generating a Voice Package
 
-Solution: Add the missing word to `vocab.words` or reference the correct vocab entry.
+A voice package is a directory containing all the audio files and compiled rule files that are needed for a voice and a locale. Voice packages support up to four different "modes". The modes, operational, broadcast, standard and casual, are different ways of telling time in the selected language. Operational is typically used by the military and in aviation where ambiguity with time is unacceptable. Broadcast is the mode used often in airports, train stations and on news broadcasts where ambiguity is discouraged. Standard mode is typically used in semi-formal settings such as offices and schools. Casual mode is used on the street, among friends and family where precision is not crucial.
 
-**Error: "No matching rule found"**
+American English Example:
 
-Solution: Add a fallback rule with `when: {any: true}` at the end of rule_order.
+| Time    | Mode        | Phrase                 |
+| ------- | ----------- | ---------------------- |
+| 8:30 AM | Operational | oh eight thirty        |
+| 8:45 PM | Operational | twenty fortyfive       |
+| 9:27 AM | Broadcast   | nine twenty seven A.M. |
+| 6:15 PM | Broadcast   | six fifteen P.M.       |
+| 4:00 AM | Standard    | four o' clock          |
+| 4:00 PM | Standard    | four o' clock          |
+| 7:12 AM | Casual      | quarter after seven    |
+| 9:28 PM | Casual      | half past nine         |
 
-## Step 8: Generate Audio
+Voice packages are generated using a YAML file that contains all of the relevant words and rules required for building time phrases.
 
-Once validation passes, generate the audio package:
+All modes are share a single set of audio files. Per-mode rules are stored separately within a `rules` sub directory. 
+
+Generated packages are written to `./audio/` by default:
+
+```text
+en_US_lessac_medium
+├── audio
+│   ├── interval_half.wav
+│   ├── interval_hourly.wav
+...
+│   └── words_zero.wav
+├── generation_info.json
+├── rules
+│   ├── broadcast_rules.json
+│   ├── casual_rules.json
+│   ├── operational_rules.json
+│   └── standard_rules.json
+└── vocab.json
+```
+
+### Generate a package
 
 ```bash
-# Download the voice model first
-tca get-model de_DE/thorsten/medium
-
-# Generate audio files
-tca generate time_formats/time_phrases_de_DE.yaml casual \
-  --model ./models/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+tca generate --yaml time_phrases_en_US.yaml --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx
 ```
 
-Output structure:
+If either option is omitted, `tca generate` will prompt you to select from available YAML files and downloaded models.
 
-```
-audio/de_DE_thorsten_medium_casual/
-  config.json              # Pico configuration
-  audio/                   # Audio files
-    word_uhr.wav
-    word_nach.wav
-    number_null.wav
-    ... (70-80 files typically)
-```
+The output directory is derived from the model filename: `audio/<locale>_<voice>_<quality>/`
 
-## Step 9: Generate All Modes
-
-Create packages for each mode you defined:
+To write to a different location:
 
 ```bash
-for mode in operational broadcast standard casual; do
-  tca generate time_formats/time_phrases_de_DE.yaml $mode \
-    --model ./models/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+tca generate --yaml time_phrases_en_US.yaml --model <path> --output-dir ./my_output
+```
+
+To overwrite an existing package without confirmation:
+
+```bash
+tca generate --yaml time_phrases_en_US.yaml --model <path> --force
+```
+
+### Audio processing options
+
+The generator applies two processing steps to every WAV file to improve intelligibility on the small speaker used in the clock.
+
+**High-pass filter** removes low-frequency content that small speakers cannot reproduce cleanly. The default cutoff is 300Hz.
+
+**Soft limiter** prevents clipping on loud peaks. The default threshold is 16000 (out of 32767).
+
+These defaults work well for a standard 4-ohm 3-watt full-range driver with no enclosure. Adjust them if your speaker sounds distorted or muffled.
+
+```bash
+# Adjust high-pass filter cutoff
+tca generate --yaml <file> --model <path> --highpass-cutoff 500
+
+# Adjust soft limiter threshold
+tca generate --yaml <file> --model <path> --speaker-threshold 24000
+
+# Disable high-pass filter
+tca generate --yaml <file> --model <path> --highpass-cutoff 0
+
+# Disable soft limiter
+tca generate --yaml <file> --model <path> --speaker-threshold 32767
+
+# Disable all processing (raw TTS output)
+tca generate --yaml <file> --model <path> --highpass-cutoff 0 --speaker-threshold 32767
+```
+
+### Troubleshooting audio quality
+
+**Audio sounds clipped or distorted on the speaker**
+
+Lower the soft limiter threshold. Start at 24000 and work downward until clipping disappears:
+
+```bash
+tca generate --yaml <file> --model <path> --speaker-threshold 24000
+```
+
+**Audio sounds muffled or boomy**
+
+Raise the high-pass filter cutoff. Try 500Hz for small drivers:
+
+```bash
+tca generate --yaml <file> --model <path> --highpass-cutoff 500
+```
+
+**Audio sounds thin or tinny**
+
+Lower the high-pass filter cutoff, or disable it entirely if your speaker handles bass well:
+
+```bash
+tca generate --yaml <file> --model <path> --highpass-cutoff 150
+```
+
+**Audio quality is fine on headphones but poor on the clock speaker**
+
+The speaker in the clock enclosure may have different characteristics than your test speaker. Use the `tca debug` command to generate test audio with multiple processing variants and compare them directly on the hardware. See `tca debug --help` for details.
+
+### Validate a package
+
+After generating, run validate to confirm that the compiled rules produce the expected spoken phrases:
+
+```bash
+tca validate --yaml time_phrases_en_US.yaml
+```
+
+This compiles the rules, generates sample phrases for a set of representative times, and checks them against the `examples:` block in the YAML. A passing result looks like:
+
+```Text
+Mode: casual
+========================================================
+  Time     Label        Phrase
+  ------- ----------- -----------------------------------
+  00:00  midnight     midnight
+  08:09  08:09        eight oh nine
+  ...
+
+  Examples: OK (5 checked)
+
+========================================================
+Result: OK
+```
+
+Any mismatch between the generated phrase and the expected phrase in the `examples:` block is reported as a warning. Fix the rules in the YAML and re-run until all modes pass.
+
+## Audio Sample Requirements
+
+All WAV files must match the mixer configuration exactly. Files that do not match will fail to play silently or raise a `ValueError` at runtime on the Pico.
+
+The `tca generate` command always produces files in the correct format. This section is only relevant if you are sourcing audio files from another tool or converting existing files.
+
+### Required format
+
+| Property | Value |
+| -------- | ----- |
+| Format | PCM WAV (uncompressed) |
+| Sample rate | 22050 Hz |
+| Channels | Mono (1 channel) |
+| Bit depth | 16-bit signed |
+
+### Converting files with ffmpeg
+
+Convert a single file:
+
+```bash
+ffmpeg -i input.wav -ar 22050 -ac 1 -sample_fmt s16 output.wav
+```
+
+Convert all WAV files in the current directory, writing results to a `converted/` subdirectory:
+
+```bash
+mkdir -p converted
+for f in *.wav; do
+    ffmpeg -i "$f" -ar 22050 -ac 1 -sample_fmt s16 "converted/$f"
 done
 ```
 
-## Testing the Generated Audio
-
-Use Python to verify the audio package:
-
-```python
-from talking_clock_audio.pico_audio import get_audio_files_for_time
-
-config_path = 'audio/de_DE_thorsten_medium_casual/config.json'
-
-# Test specific times
-test_times = [
-    (0, 0, "midnight"),
-    (6, 0, "morning"),
-    (11, 30, "before noon"),
-    (12, 0, "noon"),
-    (13, 45, "afternoon"),
-    (23, 59, "late night"),
-]
-
-for hour, minute, description in test_times:
-    files = get_audio_files_for_time(config_path, hour, minute)
-    print(f"{hour:02d}:{minute:02d} ({description}): {files}")
-```
-
-Listen to the generated files to verify quality and naturalness.
-
-## Troubleshooting
-
-### Audio files are empty or very small
-
-Check that:
-- The voice model downloaded correctly
-- Piper TTS is installed (`pip list | grep piper`)
-- The text in vocab doesn't have encoding issues
-
-### Phrases sound unnatural
-
-Review your rules and consider:
-- Are you using the right computed fields?
-- Do the rules match in the right order?
-- Are there language-specific patterns you haven't captured?
-
-### Missing vocabulary
-
-If generation fails with "KeyError", check:
-- All tokens reference words that exist in vocab
-- Computed fields are defined before use
-- Rule tokens don't reference non-existent fields
-
-### Wrong time spoken
-
-Verify:
-- Hour/minute computation formulas are correct
-- Rule conditions match the intended time ranges
-- `rule_order` lists rules from most specific to most general
-
-## Language-Specific Notes
-
-### English (en_US, en_GB)
-
-- Use 12-hour format in casual/standard modes
-- AM/PM required in broadcast mode
-- "quarter to", "half past" common in casual
-
-### Dutch (nl_NL)
-
-- "half" means halfway to NEXT hour
-- Time-of-day markers: 's ochtends, 's middags, 's avonds, 's nachts
-- 24-hour common in formal contexts
-
-### German (de_DE)
-
-- "halb" means halfway to next hour (like Dutch)
-- "Viertel nach/vor" for quarter past/to
-- "Uhr" always included except in very casual speech
-
-## Reference Files
-
-Study the existing configurations for patterns:
-
-- `time_formats/time_phrases_en_US.yaml` - English (US)
-- `time_formats/time_phrases_nl_NL.yaml` - Dutch
-
-## Contributing Your Language
-
-If you create a configuration for a new language:
-
-1. Test thoroughly with all four modes
-2. Include comprehensive `rendered_examples`
-3. Add notes about language-specific patterns
-4. Submit a pull request with your YAML file and the generated sound files
-
-## Advanced: Custom Modes
-
-You can add custom modes beyond the four standard ones:
-
-```yaml
-modes:
-  # Standard modes
-  operational: { ... }
-  broadcast: { ... }
-  standard: { ... }
-  casual: { ... }
-  
-  # Custom mode
-  my_special_mode:
-    rule_order: ["custom_rule"]
-    rules:
-      custom_rule:
-        when: {any: true}
-        tokens: ["{custom}", "{tokens}"]
-```
-
-Just add the required vocab words and generate as normal.
-
-## Quick Reference Commands
+### Verifying a file
 
 ```bash
-# List remote models
-tca list-models --remote
-
-# Download a model
-tca get-model <locale>/<voice>/<quality>
-
-# Validate config
-tca validate <yaml_file> <mode>
-
-# Generate audio
-tca generate <yaml_file> <mode> --model <path_to_onnx>
-
-# Generate with custom output
-tca generate <yaml_file> <mode> --model <path> --output-dir custom/path
-
-# Force overwrite existing files
-tca generate <yaml_file> <mode> --model <path> --force
+ffprobe -v error -show_entries stream=sample_rate,channels,sample_fmt -of compact input.wav
 ```
 
-## Next Steps
+Expected output:
 
-After generating audio packages:
+```text
+sample_rate=22050|channels=1|sample_fmt=s16
+```
 
-1. Copy the complete directory to your Raspberry Pi Pico's SD card
-2. Use the `pico_audio.py` module to load and play phrases
-3. Integrate with your clock hardware and RTC
+## Adding a New Language
 
-See the main project README for Pico integration details.
+Adding a new language requires three things: a YAML phrase configuration file, a downloaded Piper TTS voice model for that language and a run of `tca generate`.
+
+### 1. Find a voice model
+
+List available models on Hugging-Face:
+
+```bash
+tca list-models --remote | less
+```
+
+To find German voices:
+
+```bash
+tca list-models --remote | grep de_DE
+```
+
+Download the model:
+
+```bash
+tca get-model --locale de_DE --voice thorsten --quality medium
+```
+
+### 2. Create a phrase configuration
+
+Copy the [template](./time_phrases_template.yaml) as a starting point:
+
+```bash
+cp time_phrases_template.yaml time_phrases_de_DE.yaml
+```
+
+Edit the file to fill in translations and adapt the casual mode rules to your language's conventions. Place the completed template in the `time_formats` directory.
+
+The template contains comments explaining every section. Pay particular attention to the `casual` mode, which is the most language-specific. In particular, note that some languages (including Dutch and German) express the half hour relative to the upcoming hour rather than the past hour. "Half drie" in Dutch means 2:30, not 3:30.
+
+For complex languages or if you are not a native speaker, use the LLM-assisted workflow described below.
+
+### 3. Validate the configuration
+
+```bash
+tca validate --yaml time_phrases_de_DE.yaml
+```
+
+Work through any warnings until all modes report `Examples: OK`.
+
+### 4. Generate the audio package
+
+```bash
+tca generate --yaml time_phrases_de_DE.yaml --model ./models/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+```
+
+### 5. Deploy to the clock
+
+```bash
+tca deploy
+```
+
+## Building a YAML configuration with an LLM
+
+To help build the YAML file, the repository includes a system prompt that coaches an LLM through collecting the information needed to produce a valid YAML file.
+
+The prompt is in [`LOCALE_BUILDER_PROMPT.md`](./LOCALE_BUILDER_PROMPT.md). It walks the LLM through:
+
+- vocabulary collection
+- time-telling conventions for each mode
+- casual mode minute boundaries
+- the `examples:` block needed for `tca validate`
+
+The prompt is designed to be set as a **system prompt** rather than pasted as a regular message. See `LOCALE_BUILDER_PROMPT.md` for setup instructions for ChatGPT, Claude, and local LLMs.
+
+After the LLM produces a YAML file, always run:
+
+```bash
+tca validate --yaml time_phrases_LOCALE.yaml
+```
+
+LLMs occasionally make errors in the `minute_map` or get casual mode conventions wrong for languages with non-obvious conventions. The validate command will catch these before you generate audio.
+
+## Deploying to the Clock
+
+The `tca deploy` command copies generated voice packages to a mounted SD card and manages what is already on the card.
+
+### Prepare the SD card
+
+Format the SD card as FAT32. Set the volume label to `TALK-CLOCK`. The label is not required but makes it easier to identify the card in the volume list. Any SD card with at least 1GB of storage is sufficient.
+
+### Run tca deploy
+
+Insert and mount the SD card, then run:
+
+```bash
+tca deploy
+```
+
+**Step 1: Select a volume**
+
+The command lists all mounted volumes and asks you to pick one:
+
+```text
+? Select SD card volume:
+  /Volumes/TALK-CLOCK
+  /Volumes/Backup Drive
+  /Volumes/CIRCUITPY
+```
+
+**Step 2: Review the summary**
+
+After selecting a volume, a summary shows what is available locally and what is already on the card:
+
+```text
+Source:  /Users/aaron/talking-clock-audio/audio
+Target:  /Volumes/TALK-CLOCK
+
+LOCAL PACKAGES                                   ON SD CARD
+--------------------------------------------------------------------------------
+en_US_lessac_medium      (lessac, medium, 2026-04-04)   (not present)
+en_US_amy_medium         (amy, medium, 2026-04-04)      (amy, medium, 2026-03-12)
+nl_NL_pim_medium         (pim, medium, 2026-04-04)      (pim, medium, 2026-04-04)
+```
+
+Colour coding:
+
+- Cyan: present locally only, not yet on the card
+- Yellow: present both locally and on the card
+- Green: present on the card only, not in the local audio directory
+
+**Step 3: Select packages to copy**
+
+A checkbox menu lists all local packages. Use the arrow keys to move and space to select. Press enter to confirm:
+
+```text
+? Select packages to copy to SD card:
+  [ ] en_US_lessac_medium    (lessac, medium, 2026-04-04)
+  [x] en_US_amy_medium       (amy, medium, 2026-04-04)
+  [ ] nl_NL_pim_medium       (pim, medium, 2026-04-04)
+```
+
+If a selected package already exists on the card you will be asked to confirm before it is overwritten.
+
+**Step 4: Delete packages from the card**
+
+After copying, the command asks whether you want to delete anything from the card:
+
+```text
+? Would you like to delete any packages from the SD card?
+```
+
+If you answer yes, a checkbox menu lists everything currently on the card. Each selected package requires a separate confirmation before it is deleted:
+
+```text
+? Permanently delete 'nl_NL_rdh_medium' from SD card? (y/N)
+```
+
+Only directories that are valid voice packages can be deleted through this command.
+
+### Expert mode
+
+If you already know the target path, skip the volume selection prompt:
+
+```bash
+tca deploy --target /Volumes/TALK-CLOCK
+```
+
+To scan a different local audio directory:
+
+```bash
+tca deploy --source-dir ./my_audio --target /Volumes/TALK-CLOCK
+```
+
+To skip overwrite confirmation when copying:
+
+```bash
+tca deploy --target /Volumes/TALK-CLOCK --force
+```
+
+Full expert mode:
+
+```bash
+tca deploy --source-dir ./audio --target /Volumes/TALK-CLOCK --force
+```
+
+## CLI Reference
+
+All commands support interactive mode (prompts for missing options) and expert mode (all options supplied as flags). Running any command without flags will prompt for required inputs. Every command prints the full expert-mode command at the end of a successful run for easy repetition.
+
+Global flags apply to all commands:
+
+```bash
+tca --verbose <command>    # show debug logging
+tca --quiet <command>      # suppress all output except errors
+tca <command> --help       # show full help for a command
+```
+
+### list-models
+
+Lists available voice models. Defaults to showing locally downloaded models.
+
+```bash
+tca list-models                              # list local models
+tca list-models --remote                     # list all models on Hugging Face
+tca list-models --local --model-dir ./models # specify model directory
+```
+
+### get-model
+
+Downloads a voice model from Hugging Face and caches it in `./models/`.
+
+```bash
+tca get-model                                              # interactive
+tca get-model --locale en_US --voice lessac --quality medium
+tca get-model --locale nl_NL --voice pim --quality medium
+tca get-model --model-dir /path/to/models --locale en_US --voice lessac --quality medium
+```
+
+### validate
+
+Compiles the rules from a YAML file, generates sample phrases for ten representative times, and checks them against the `examples:` block. Optionally plays the generated audio sequences if a matching package exists in `./audio/`.
+
+```bash
+tca validate                                 # interactive
+tca validate --yaml time_phrases_en_US.yaml
+```
+
+### generate
+
+Generates a complete voice package from a YAML phrase file and a downloaded voice model. All modes are generated in a single run and share one set of WAV files.
+
+```bash
+tca generate                                 # interactive
+tca generate --yaml time_phrases_en_US.yaml --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+tca generate --yaml time_phrases_en_US.yaml --model <path> --output-dir ./my_output
+tca generate --yaml time_phrases_en_US.yaml --model <path> --force
+tca generate --yaml time_phrases_en_US.yaml --model <path> --highpass-cutoff 500
+tca generate --yaml time_phrases_en_US.yaml --model <path> --speaker-threshold 24000
+tca generate --yaml time_phrases_en_US.yaml --model <path> --highpass-cutoff 0 --speaker-threshold 32767
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--yaml` | prompt | Path to locale YAML file |
+| `--model` | prompt | Path to `.onnx` voice model |
+| `--output-dir` | `audio/<locale>_<voice>_<quality>` | Output directory |
+| `--force` | off | Overwrite existing files without confirmation |
+| `--highpass-cutoff` | 300 | High-pass filter cutoff in Hz. Set to 0 to disable |
+| `--speaker-threshold` | 16000 | Soft limiter threshold (0-32767). Set to 32767 to disable |
+
+### deploy
+
+Copies generated voice packages to a mounted SD card and manages packages already on the card. See the Deploying to the Clock section for a full walkthrough.
+
+```bash
+tca deploy                                               # interactive
+tca deploy --target /Volumes/TALK-CLOCK
+tca deploy --source-dir ./audio --target /Volumes/TALK-CLOCK
+tca deploy --source-dir ./audio --target /Volumes/TALK-CLOCK --force
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--source-dir` | `./audio` | Local directory to scan for voice packages |
+| `--target` | prompt | Path to mounted SD card volume |
+| `--force` | off | Skip overwrite confirmation when copying |
+
+### debug
+
+Generates speaker test audio from a debug YAML configuration. Produces one subdirectory per variant, each containing a label file and one WAV per test sentence. All sentences are normalized to a fixed peak before processing so that filter and limiter variants can be compared fairly on the hardware.
+
+```bash
+tca debug --model <path>                                 # uses tests/speaker_test.yaml
+tca debug --yaml tests/speaker_test.yaml --model <path>
+tca debug --yaml tests/speaker_test.yaml --model <path> --output-dir ./audio/debug
+tca debug --yaml tests/speaker_test.yaml --model <path> --force
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--yaml` | `tests/speaker_test.yaml` | Path to debug configuration YAML |
+| `--model` | prompt | Path to `.onnx` voice model |
+| `--output-dir` | `./audio/debug` | Output directory for test audio |
+| `--force` | off | Overwrite existing files without confirmation |
+
+## Project Structure
+
+```text
+talking-clock-audio/
+  src/
+    talking_clock_audio/
+      __init__.py              # package initialisation and logging setup
+      cli.py                   # command-line interface (tca commands)
+      deploy.py                # SD card deployment logic
+      tts_generator.py         # Piper TTS audio generation and speaker processing
+      rules_generator.py       # compiles locale YAML into runtime JSON rule files
+      phrase_generator.py      # evaluates compiled rules to produce audio sequences
+      pico_rules.py            # on-device rule evaluation (also used by validate)
+      debug_generator.py       # speaker test audio generation
+      voice_manager.py         # Hugging Face voice model listing and download
+  tests/
+    speaker_test.yaml          # default debug configuration
+    test_phrase_generator.py
+    test_rules.py
+    test_voice_manager.py
+    test_voice_scan.py
+  time_formats/
+    time_phrases_en_GB.yaml    # British English locale configuration
+    time_phrases_en_US.yaml    # American English locale configuration
+    time_phrases_nl_NL.yaml    # Dutch locale configuration
+  time_phrases_template.yaml   # template for adding a new language
+  LOCALE_BUILDER_PROMPT.md     # LLM system prompt for building locale YAML files
+  pyproject.toml               # package configuration and dependencies
+  README.md                    # this file
+```
+
+## Audio Debug Mode
+
+The clock has a built-in speaker test mode for comparing audio processing variants directly on the hardware. This is the most reliable way to tune the high-pass filter and soft limiter settings for a specific speaker, since the clock enclosure and amplifier circuit both affect the final sound.
+
+### Generate test audio
+
+The `tca debug` command generates a set of WAV files from a [debug YAML](./tests/speaker_test.yaml) configuration. Each variant produces a label file followed by one WAV per test sentence, all processed with the variant's filter and limiter settings.
+
+```bash
+tca debug --model ./models/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+```
+
+This uses `tests/speaker_test.yaml` by default and writes output to `./audio/debug/`.
+
+### Copy debug audio to the SD card
+
+Copy the entire `debug/` directory to the root of the SD. The clock expects the debug audio at `/sd/debug/` on the mounted filesystem.
+
+Using the Finder, File Manager, or command line:
+
+```bash
+cp -r ./audio/debug /Volumes/TALK-CLOCK/debug
+```
+
+Eject and insert the SD card into the clock.
+
+### Enter debug mode
+
+Debug mode is entered by holding the ANNOUNCE button during a cold boot or soft boot from `mpremote`. A reboot can be triggered in two ways.
+
+**Power cycle:** disconnect and reconnect power to the clock while holding ANNOUNCE.
+
+**Using mpremote:** [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) is a command-line tool for interacting with MicroPython and CircuitPython devices over USB. Connect the Pico via USB, then run:
+
+```bash
+mpremote connect auto
+```
+
+Once connected, press `Ctrl+D` to perform a soft reboot while holding the ANNOUNCE button on the clock.
+
+### Navigating debug mode
+
+In debug mode the clock loads variant directories from `/sd/debug/` in alphabetical order.
+
+| Button   | Action                                         |
+| -------- | ---------------------------------------------- |
+| ANNOUNCE | play all files in the current variant in order |
+| PLUS     | next variant                                   |
+| MINUS    | previous variant                               |
+
+Each variant plays its label file first so you can identify which settings you are hearing, followed by the test sentences. Press PLUS or MINUS at any point to interrupt playback and move to another variant.
+
+To exit debug mode, reboot by unplugging or using ctrl+D in `mpremote`. Do not hold down the ANNOUNCE button during reboot.
+
+## License
+
+GPL-3.0-or-later
+
+## Contributing
+
+Contributions welcome! Especially:
+
+- New language configurations
+- Voice model recommendations
+- Bug fixes and improvements
+- Documentation improvements
+
+## Acknowledgments
+
+- [Piper TTS](https://github.com/rhasspy/piper) for high-quality offline text-to-speech
+- [Hugging Face](https://huggingface.co/rhasspy/piper-voices) for hosting voice models
+- The broader maker community for hardware designs and CircuitPython libraries
+
+## Support
+
+For issues, questions, or contributions, please open an issue on GitHub.

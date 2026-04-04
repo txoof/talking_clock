@@ -1,0 +1,8 @@
+{
+  "volume_step": 7,
+  "voice": "en_US_lessac_medium_standard",
+  "alarm_enabled": false,
+  "alarm_hour": 7,
+  "alarm_minute": 0,
+  "announce_interval": "off"
+}

@@ -1,0 +1,390 @@
+# time_phrases_LOCALE.yaml
+#
+# Locale phrase configuration for the Talking Clock.
+# Replace LOCALE with the locale code, e.g. de_DE, fr_FR, es_ES.
+#
+# Rename this file to time_phrases_LOCALE.yaml before running tca validate.
+#
+# Workflow:
+#   1. Fill in all sections below.
+#   2. Run: tca validate --yaml time_phrases_LOCALE.yaml
+#   3. Fix any warnings shown in the Examples section.
+#   4. Run: tca generate --yaml time_phrases_LOCALE.yaml --model <path>
+#
+# To generate this file with help from an LLM, see LOCALE_BUILDER_PROMPT.md.
+
+locale: LOCALE  # e.g. de_DE
+
+description: >
+  LANGUAGE_NAME time phrases.
+  Source YAML for compiling locale-specific Pico rule files.
+
+# ---------------------------------------------------------------------------
+# vocab
+#
+# All spoken words used by this locale. Each entry maps a symbolic key to
+# the text that Piper TTS will speak. Keys must not be changed; only the
+# quoted text on the right should be translated.
+#
+# words        - time-related words
+# menu         - settings menu spoken labels
+# toggle       - on/off state labels
+# interval     - auto-announce interval labels
+# voice        - the name spoken when this voice is selected in the menu
+# mode         - spoken names for each announcement mode
+# number_words - spoken forms of 0-59
+# ---------------------------------------------------------------------------
+
+vocab:
+  words:
+    oclock: "TRANSLATE: o'clock"         # e.g. "Uhr" in German
+    past: "TRANSLATE: past"              # e.g. "nach" -- delete if not used
+    to: "TRANSLATE: to"                  # e.g. "vor" -- delete if not used
+    quarter: "TRANSLATE: quarter"        # e.g. "Viertel"
+    half: "TRANSLATE: half"              # e.g. "halb"
+    oh: "TRANSLATE: oh"                  # spoken before single-digit minutes, e.g. "oh nine"
+    zero: "TRANSLATE: zero"              # numeric zero
+    hundred: "TRANSLATE: hundred"        # used in operational mode, e.g. "thirteen hundred"
+    hours: "TRANSLATE: hours"            # used in operational mode, e.g. "thirteen hundred hours"
+    midnight: "TRANSLATE: midnight"
+    noon: "TRANSLATE: noon"
+    almost: "TRANSLATE: almost"          # used for e.g. "almost nine" near the hour
+
+  menu:
+    enter: "TRANSLATE: settings"
+    exit: "TRANSLATE: done"
+    set_time: "TRANSLATE: set time"
+    set_alarm: "TRANSLATE: set alarm"
+    alarm_enabled: "TRANSLATE: enable alarm"
+    alarm_tone: "TRANSLATE: alarm tone"
+    voice: "TRANSLATE: voice"
+    announce_interval: "TRANSLATE: announcement interval"
+    mode: "TRANSLATE: time format"
+
+  toggle:
+    on: "TRANSLATE: on"
+    off: "TRANSLATE: off"
+
+  interval:
+    hourly: "TRANSLATE: every hour"
+    half: "TRANSLATE: every half hour"
+    quarter: "TRANSLATE: every quarter hour"
+
+  voice:
+    name: "TRANSLATE: LANGUAGE_NAME"     # e.g. "Deutsch" -- spoken when selected in menu
+
+  mode:
+    operational: "TRANSLATE: operational"
+    broadcast: "TRANSLATE: broadcast"
+    standard: "TRANSLATE: standard"
+    casual: "TRANSLATE: casual"
+
+  number_words:
+    0: "TRANSLATE: zero"
+    1: "TRANSLATE: one"
+    2: "TRANSLATE: two"
+    3: "TRANSLATE: three"
+    4: "TRANSLATE: four"
+    5: "TRANSLATE: five"
+    6: "TRANSLATE: six"
+    7: "TRANSLATE: seven"
+    8: "TRANSLATE: eight"
+    9: "TRANSLATE: nine"
+    10: "TRANSLATE: ten"
+    11: "TRANSLATE: eleven"
+    12: "TRANSLATE: twelve"
+    13: "TRANSLATE: thirteen"
+    14: "TRANSLATE: fourteen"
+    15: "TRANSLATE: fifteen"
+    16: "TRANSLATE: sixteen"
+    17: "TRANSLATE: seventeen"
+    18: "TRANSLATE: eighteen"
+    19: "TRANSLATE: nineteen"
+    20: "TRANSLATE: twenty"
+    21: "TRANSLATE: twenty one"
+    22: "TRANSLATE: twenty two"
+    23: "TRANSLATE: twenty three"
+    24: "TRANSLATE: twenty four"
+    25: "TRANSLATE: twenty five"
+    26: "TRANSLATE: twenty six"
+    27: "TRANSLATE: twenty seven"
+    28: "TRANSLATE: twenty eight"
+    29: "TRANSLATE: twenty nine"
+    30: "TRANSLATE: thirty"
+    31: "TRANSLATE: thirty one"
+    32: "TRANSLATE: thirty two"
+    33: "TRANSLATE: thirty three"
+    34: "TRANSLATE: thirty four"
+    35: "TRANSLATE: thirty five"
+    36: "TRANSLATE: thirty six"
+    37: "TRANSLATE: thirty seven"
+    38: "TRANSLATE: thirty eight"
+    39: "TRANSLATE: thirty nine"
+    40: "TRANSLATE: forty"
+    41: "TRANSLATE: forty one"
+    42: "TRANSLATE: forty two"
+    43: "TRANSLATE: forty three"
+    44: "TRANSLATE: forty four"
+    45: "TRANSLATE: forty five"
+    46: "TRANSLATE: forty six"
+    47: "TRANSLATE: forty seven"
+    48: "TRANSLATE: forty eight"
+    49: "TRANSLATE: forty nine"
+    50: "TRANSLATE: fifty"
+    51: "TRANSLATE: fifty one"
+    52: "TRANSLATE: fifty two"
+    53: "TRANSLATE: fifty three"
+    54: "TRANSLATE: fifty four"
+    55: "TRANSLATE: fifty five"
+    56: "TRANSLATE: fifty six"
+    57: "TRANSLATE: fifty seven"
+    58: "TRANSLATE: fifty eight"
+    59: "TRANSLATE: fifty nine"
+
+# ---------------------------------------------------------------------------
+# fields
+#
+# Computed values available as placeholders in mode rules.
+# These rarely need to change. day_period defines AM/PM labels if your
+# language uses them. Remove the day_period block if not needed.
+# ---------------------------------------------------------------------------
+
+fields:
+  computed:
+    h12: "((hour_24 + 11) % 12) + 1"
+    next_h12: "(h12 % 12) + 1"
+    m_to: "60 - minute"
+    day_period:
+      when_hour_24_lt_12: "am"   # replace "am"/"pm" with locale equivalents
+      otherwise: "pm"            # or remove this block entirely if not used
+
+# ---------------------------------------------------------------------------
+# modes
+#
+# Four standardized modes. Each mode defines patterns (reusable token lists)
+# and rules (which pattern to use for a given time).
+#
+# Available token placeholders:
+#   {h12}      - hour in 12-hour format (1-12)
+#   {h24}      - hour in 24-hour format (0-23)
+#   {next_h12} - next hour in 12-hour format
+#   {m}        - minute (0-59)
+#   {m_to}     - minutes until next hour
+#   {period}   - day period from fields.computed.day_period
+#
+# Rule conditions:
+#   any: true
+#   minute_eq: N
+#   minute_lt: N
+#   minute_gt: N
+#   minute_lte: N
+#   minute_gte: N
+#   hour_24_eq: N
+#
+# The minute_map schema (used in casual mode below) is a compact way to
+# assign a pattern to every minute 0-59. special_cases handle exact times
+# like midnight and noon before the minute_map is consulted.
+# ---------------------------------------------------------------------------
+
+modes:
+
+  # --- operational ---
+  # Precise 24-hour announcements. Used in formal or assistive contexts.
+  # Example: "fourteen thirty hours", "zero nine hundred hours"
+
+  operational:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      hundred_hours: ["number_words.{h24}", "words.hundred", "words.hours"]
+      zero_pad: ["number_words.{h24}", "words.zero", "number_words.{m}", "words.hours"]
+      full: ["number_words.{h24}", "number_words.{m}", "words.hours"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: hundred_hours
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  # --- broadcast ---
+  # 12-hour announcements with AM/PM. Adjust or remove {period} tokens
+  # if your language does not use AM/PM suffixes.
+  # Example: "two thirty p m", "eight oh nine a m"
+
+  broadcast:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock", "words.{period}"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{m}", "words.{period}"]
+      full: ["number_words.{h12}", "number_words.{m}", "words.{period}"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  # --- standard ---
+  # 12-hour announcements without AM/PM. Clean and unambiguous for most
+  # contexts. Example: "two thirty", "eight oh nine", "midnight"
+
+  standard:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{m}"]
+      full: ["number_words.{h12}", "number_words.{m}"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  # --- casual ---
+  # Conversational phrasing. This is the most language-specific mode.
+  # Adapt the patterns and minute_map to match how people naturally
+  # speak the time in your language.
+  #
+  # This example follows English conventions (quarter past, half past,
+  # quarter to, almost). Replace with your language's conventions.
+  #
+  # The minute_map assigns a pattern name to every minute 0-59.
+  # special_cases handle exact hour:minute combinations first.
+
+  casual:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      minutes_past: ["number_words.{m}", "words.past", "number_words.{h12}"]
+      quarter_past: ["words.quarter", "words.past", "number_words.{h12}"]
+      half_past: ["words.half", "words.past", "number_words.{h12}"]
+      minutes_to: ["number_words.{m_to}", "words.to", "number_words.{next_h12}"]
+      quarter_to: ["words.quarter", "words.to", "number_words.{next_h12}"]
+      almost: ["words.almost", "number_words.{next_h12}"]
+
+    special_cases:
+      "00:00": midnight
+      "12:00": noon
+
+    minute_map:
+      0: oclock
+      1: oclock
+      2: oclock
+      3: minutes_past
+      4: minutes_past
+      5: minutes_past
+      6: minutes_past
+      7: minutes_past
+      8: quarter_past
+      9: quarter_past
+      10: quarter_past
+      11: quarter_past
+      12: quarter_past
+      13: quarter_past
+      14: quarter_past
+      15: quarter_past
+      16: quarter_past
+      17: quarter_past
+      18: minutes_past
+      19: minutes_past
+      20: minutes_past
+      21: minutes_past
+      22: half_past
+      23: half_past
+      24: half_past
+      25: half_past
+      26: half_past
+      27: half_past
+      28: half_past
+      29: half_past
+      30: half_past
+      31: half_past
+      32: half_past
+      33: half_past
+      34: half_past
+      35: half_past
+      36: half_past
+      37: half_past
+      38: minutes_to
+      39: minutes_to
+      40: minutes_to
+      41: minutes_to
+      42: minutes_to
+      43: quarter_to
+      44: quarter_to
+      45: quarter_to
+      46: quarter_to
+      47: quarter_to
+      48: quarter_to
+      49: quarter_to
+      50: minutes_to
+      51: minutes_to
+      52: minutes_to
+      53: minutes_to
+      54: minutes_to
+      55: almost
+      56: almost
+      57: almost
+      58: almost
+      59: almost
+
+# ---------------------------------------------------------------------------
+# examples
+#
+# Used by `tca validate` to check that your rules produce the expected output.
+# Add at least one example per mode. Keys are "HH:MM" in 24-hour format.
+# The value for each mode is the exact spoken phrase that should result,
+# with words separated by spaces.
+#
+# These act as a test suite. If validate reports a mismatch, fix the rules
+# or the minute_map until all examples pass.
+# ---------------------------------------------------------------------------
+
+examples:
+  "00:00":
+    operational: "EXPECTED PHRASE"    # e.g. "midnight"
+    broadcast: "EXPECTED PHRASE"
+    standard: "EXPECTED PHRASE"
+    casual: "EXPECTED PHRASE"
+  "12:00":
+    operational: "EXPECTED PHRASE"    # e.g. "noon"
+    broadcast: "EXPECTED PHRASE"
+    standard: "EXPECTED PHRASE"
+    casual: "EXPECTED PHRASE"
+  "08:00":
+    operational: "EXPECTED PHRASE"    # e.g. "eight hundred hours"
+    broadcast: "EXPECTED PHRASE"
+    standard: "EXPECTED PHRASE"
+    casual: "EXPECTED PHRASE"
+  "14:30":
+    operational: "EXPECTED PHRASE"
+    broadcast: "EXPECTED PHRASE"
+    standard: "EXPECTED PHRASE"
+    casual: "EXPECTED PHRASE"
+  "20:48":
+    operational: "EXPECTED PHRASE"
+    broadcast: "EXPECTED PHRASE"
+    standard: "EXPECTED PHRASE"
+    casual: "EXPECTED PHRASE"

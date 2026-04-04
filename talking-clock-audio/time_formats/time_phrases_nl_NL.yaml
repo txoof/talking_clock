@@ -1,24 +1,51 @@
 locale: nl_NL
 description: >
-  Dutch time phrases with four standardized output modes.
-  Audio generation will automatically deduplicate vocab entries with identical text
-  (case-insensitive comparison, but whitespace and punctuation are preserved).
+  Dutch time phrases.
+  Source YAML for compiling locale-specific Pico rule files.
 
 vocab:
   words:
-    uur: "uur"
-    nul: "nul"
-    twaalf: "twaalf"
+    oclock: "uur"
     over: "over"
     voor: "voor"
+    quarter: "kwart"
     half: "half"
-    kwart: "kwart"
-    ochtends: "'s ochtends"
-    middags: "'s middags"
-    avonds: "'s avonds"
-    nachts: "'s nachts"
-    middernacht: "middernacht"
-    middag: "middag"
+    oh: "nul"
+    zero: "nul"
+    hundred: "honderd"
+    hours: "uur"
+    midnight: "middernacht"
+    noon: "middag"
+    almost: "bijna"
+
+  menu:
+    enter: "instellingen"
+    exit: "klaar"
+    set_time: "tijd instellen"
+    set_alarm: "wekker instellen"
+    alarm_enabled: "wekker aan"
+    alarm_tone: "wekkergeluid"
+    voice: "stem"
+    announce_interval: "aankondigingsinterval"
+    mode: "tijdweergave"
+
+  toggle:
+    on: "aan"
+    off: "uit"
+
+  interval:
+    hourly: "elk uur"
+    half: "elk half uur"
+    quarter: "elk kwartier"
+
+  voice:
+    name: "Nederlands"
+
+  mode:
+    operational: "operationeel"
+    broadcast: "formeel"
+    standard: "standaard"
+    casual: "informeel"
 
   number_words:
     0: "nul"
@@ -43,8 +70,8 @@ vocab:
     19: "negentien"
     20: "twintig"
     21: "eenentwintig"
-    22: "tweeëntwintig"
-    23: "drieëntwintig"
+    22: "tweeentwintig"
+    23: "drieentwintig"
     24: "vierentwintig"
     25: "vijfentwintig"
     26: "zesentwintig"
@@ -53,8 +80,8 @@ vocab:
     29: "negenentwintig"
     30: "dertig"
     31: "eenendertig"
-    32: "tweeëndertig"
-    33: "drieëndertig"
+    32: "tweeendertig"
+    33: "drieendertig"
     34: "vierendertig"
     35: "vijfendertig"
     36: "zesendertig"
@@ -84,193 +111,164 @@ vocab:
 
 fields:
   computed:
-    hour_24_word: "number_words[hour_24]"
-    minute_word: "number_words[minute]"
-    hour_12: "((hour_24 + 11) mod 12) + 1"
-    hour_12_word: "number_words[hour_12]"
-    next_hour_12: "(hour_12 mod 12) + 1"
-    next_hour_12_word: "number_words[next_hour_12]"
-    minute_to_next: "60 - minute"
-    minute_to_next_word: "number_words[minute_to_next]"
+    h12: "((hour_24 + 11) % 12) + 1"
+    next_h12: "(h12 % 12) + 1"
+    m_to: "60 - minute"
     day_period:
-      when_hour_24_lt_6: "nachts"
-      when_hour_24_lt_12: "ochtends"
-      when_hour_24_lt_18: "middags"
-      otherwise: "avonds"
-    day_period_word: "words[day_period]"
+      when_hour_24_lt_12: "am"
+      otherwise: "pm"
 
 modes:
   operational:
-    rule_order: ["midnight", "on_the_hour", "minute_lt_10", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      hundred_hours: ["number_words.{hour_24}", "words.hundred", "words.hours"]
+      zero_pad: ["number_words.{hour_24}", "words.zero", "number_words.{minute}", "words.hours"]
+      full: ["number_words.{hour_24}", "number_words.{minute}", "words.hours"]
+
     rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{nul}", "{uur}"]
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_24_word}", "{uur}"]
-      minute_lt_10:
-        when: {minute_lt: 10, minute_gt: 0}
-        tokens: ["{hour_24_word}", "{nul}", "{minute_word}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_24_word}", "{minute_word}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: hundred_hours
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   broadcast:
-    rule_order: ["midnight", "midday", "on_the_hour", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{hour_24}", "words.oclock"]
+      zero_pad: ["number_words.{hour_24}", "words.oh", "number_words.{minute}"]
+      full: ["number_words.{hour_24}", "number_words.{minute}"]
+
     rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{nul}", "{uur}"]
-      midday:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{twaalf}", "{uur}"]
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_24_word}", "{uur}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_24_word}", "{uur}", "{minute_word}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   standard:
-    rule_order: ["midnight", "midday", "on_the_hour", "hour_minute"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{hour_24}", "words.oclock"]
+      zero_pad: ["number_words.{hour_24}", "words.oh", "number_words.{minute}"]
+      full: ["number_words.{hour_24}", "number_words.{minute}"]
+
     rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{twaalf}", "{uur}", "{nachts}"]
-      midday:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{twaalf}", "{uur}", "{middags}"]
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{uur}", "{day_period_word}"]
-      hour_minute:
-        when: {any: true}
-        tokens: ["{hour_12_word}", "{uur}", "{minute_word}", "{day_period_word}"]
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
 
   casual:
-    rule_order: [
-      "midnight",
-      "midday",
-      "on_the_hour",
-      "half_hour",
-      "kwart_over",
-      "kwart_voor",
-      "minutes_over",
-      "minutes_voor"
-    ]
-    rules:
-      midnight:
-        when: {hour_24_eq: 0, minute_eq: 0}
-        tokens: ["{middernacht}"]
-      midday:
-        when: {hour_24_eq: 12, minute_eq: 0}
-        tokens: ["{middag}"]
-      on_the_hour:
-        when: {minute_eq: 0}
-        tokens: ["{hour_12_word}", "{uur}"]
-      half_hour:
-        when: {minute_eq: 30}
-        tokens: ["{half}", "{next_hour_12_word}"]
-      kwart_over:
-        when: {minute_eq: 15}
-        tokens: ["{kwart}", "{over}", "{hour_12_word}"]
-      kwart_voor:
-        when: {minute_eq: 45}
-        tokens: ["{kwart}", "{voor}", "{next_hour_12_word}"]
-      minutes_over:
-        when: {minute_lt: 30, minute_gt: 0}
-        tokens: ["{minute_word}", "{over}", "{hour_12_word}"]
-      minutes_voor:
-        when: {minute_gt: 30}
-        tokens: ["{minute_to_next_word}", "{voor}", "{next_hour_12_word}"]
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      minutes_over: ["number_words.{minute}", "words.over", "number_words.{h12}"]
+      quarter_over: ["words.quarter", "words.over", "number_words.{h12}"]
+      half_next: ["words.half", "number_words.{next_h12}"]
+      minutes_voor: ["number_words.{m_to}", "words.voor", "number_words.{next_h12}"]
+      quarter_voor: ["words.quarter", "words.voor", "number_words.{next_h12}"]
+      almost: ["words.almost", "number_words.{next_h12}"]
 
-rendered_examples:
-  midnight:
-    00:00:
-      operational: "nul uur"
-      broadcast: "nul uur"
-      standard: "twaalf uur 's nachts"
-      casual: "middernacht"
+    special_cases:
+      "00:00": midnight
+      "12:00": noon
 
-  morning:
-    11:00:
-      operational: "elf uur"
-      broadcast: "elf uur"
-      standard: "elf uur 's ochtends"
-      casual: "elf uur"
-    
-    11:01:
-      operational: "elf nul een"
-      broadcast: "elf uur een"
-      standard: "elf uur een 's ochtends"
-      casual: "een over elf"
-    
-    11:07:
-      operational: "elf nul zeven"
-      broadcast: "elf uur zeven"
-      standard: "elf uur zeven 's ochtends"
-      casual: "zeven over elf"
-    
-    11:15:
-      operational: "elf vijftien"
-      broadcast: "elf uur vijftien"
-      standard: "elf uur vijftien 's ochtends"
-      casual: "kwart over elf"
-    
-    11:30:
-      operational: "elf dertig"
-      broadcast: "elf uur dertig"
-      standard: "elf uur dertig 's ochtends"
-      casual: "half twaalf"
-    
-    11:45:
-      operational: "elf vijfenveertig"
-      broadcast: "elf uur vijfenveertig"
-      standard: "elf uur vijfenveertig 's ochtends"
-      casual: "kwart voor twaalf"
-    
-    11:53:
-      operational: "elf drieënvijftig"
-      broadcast: "elf uur drieënvijftig"
-      standard: "elf uur drieënvijftig 's ochtends"
-      casual: "zeven voor twaalf"
+    minute_map:
+      0: oclock
+      1: oclock
+      2: oclock
+      3: minutes_over
+      4: minutes_over
+      5: minutes_over
+      6: minutes_over
+      7: minutes_over
+      8: quarter_over
+      9: quarter_over
+      10: quarter_over
+      11: quarter_over
+      12: quarter_over
+      13: quarter_over
+      14: quarter_over
+      15: quarter_over
+      16: quarter_over
+      17: quarter_over
+      18: minutes_over
+      19: minutes_over
+      20: minutes_over
+      21: minutes_over
+      22: half_next
+      23: half_next
+      24: half_next
+      25: half_next
+      26: half_next
+      27: half_next
+      28: half_next
+      29: half_next
+      30: half_next
+      31: half_next
+      32: half_next
+      33: half_next
+      34: half_next
+      35: half_next
+      36: half_next
+      37: half_next
+      38: minutes_voor
+      39: minutes_voor
+      40: minutes_voor
+      41: minutes_voor
+      42: minutes_voor
+      43: quarter_voor
+      44: quarter_voor
+      45: quarter_voor
+      46: quarter_voor
+      47: quarter_voor
+      48: quarter_voor
+      49: quarter_voor
+      50: minutes_voor
+      51: minutes_voor
+      52: minutes_voor
+      53: minutes_voor
+      54: minutes_voor
+      55: almost
+      56: almost
+      57: almost
+      58: almost
+      59: almost
 
-  noon:
-    12:00:
-      operational: "twaalf uur"
-      broadcast: "twaalf uur"
-      standard: "twaalf uur 's middags"
-      casual: "middag"
-    
-    12:30:
-      operational: "twaalf dertig"
-      broadcast: "twaalf uur dertig"
-      standard: "twaalf uur dertig 's middags"
-      casual: "half een"
-
-  afternoon:
-    13:00:
-      operational: "dertien uur"
-      broadcast: "dertien uur"
-      standard: "een uur 's middags"
-      casual: "een uur"
-    
-    13:30:
-      operational: "dertien dertig"
-      broadcast: "dertien uur dertig"
-      standard: "een uur dertig 's middags"
-      casual: "half twee"
-
-  evening:
-    23:00:
-      operational: "drieëntwintig uur"
-      broadcast: "drieëntwintig uur"
-      standard: "elf uur 's avonds"
-      casual: "elf uur"
-    
-    23:07:
-      operational: "drieëntwintig nul zeven"
-      broadcast: "drieëntwintig uur zeven"
-      standard: "elf uur zeven 's avonds"
-      casual: "zeven over elf"
+examples:
+  "14:30":
+    operational: "veertien dertig uur"
+    broadcast: "veertien dertig"
+    standard: "veertien dertig"
+    casual: "half drie"
+  "20:48":
+    operational: "twintig achtenveertig uur"
+    broadcast: "twintig achtenveertig"
+    standard: "twintig achtenveertig"
+    casual: "kwart voor negen"
+  "08:12":
+    casual: "kwart over acht"
+  "08:56":
+    casual: "bijna negen"

@@ -1,0 +1,276 @@
+locale: en_GB
+description: >
+  British English time phrases.
+  Source YAML for compiling locale-specific Pico rule files.
+
+vocab:
+  words:
+    am: "a.m."
+    pm: "p.m."
+    oclock: "o' clock"
+    past: "past"
+    to: "to"
+    quarter: "quarter"
+    half: "half"
+    oh: "oh"
+    zero: "zero"
+    hundred: "hundred"
+    hours: "hours"
+    midnight: "midnight"
+    noon: "noon"
+    almost: "almost"
+
+  menu:
+    enter: "settings"
+    exit: "done"
+    set_time: "set time"
+    set_alarm: "set alarm"
+    alarm_enabled: "enable alarm"
+    alarm_tone: "alarm tone"
+    voice: "voice"
+    announce_interval: "announcement interval"
+    mode: "time format"
+
+  toggle:
+    on: "on"
+    off: "off"
+
+  interval:
+    hourly: "every hour"
+    half: "every half hour"
+    quarter: "every quarter hour"
+
+  voice:
+    name: "British English"
+
+  mode:
+    operational: "operational"
+    broadcast: "broadcast"
+    standard: "standard"
+    casual: "casual"
+
+  number_words:
+    0: "zero"
+    1: "one"
+    2: "two"
+    3: "three"
+    4: "four"
+    5: "five"
+    6: "six"
+    7: "seven"
+    8: "eight"
+    9: "nine"
+    10: "ten"
+    11: "eleven"
+    12: "twelve"
+    13: "thirteen"
+    14: "fourteen"
+    15: "fifteen"
+    16: "sixteen"
+    17: "seventeen"
+    18: "eighteen"
+    19: "nineteen"
+    20: "twenty"
+    21: "twenty one"
+    22: "twenty two"
+    23: "twenty three"
+    24: "twenty four"
+    25: "twenty five"
+    26: "twenty six"
+    27: "twenty seven"
+    28: "twenty eight"
+    29: "twenty nine"
+    30: "thirty"
+    31: "thirty one"
+    32: "thirty two"
+    33: "thirty three"
+    34: "thirty four"
+    35: "thirty five"
+    36: "thirty six"
+    37: "thirty seven"
+    38: "thirty eight"
+    39: "thirty nine"
+    40: "forty"
+    41: "forty one"
+    42: "forty two"
+    43: "forty three"
+    44: "forty four"
+    45: "forty five"
+    46: "forty six"
+    47: "forty seven"
+    48: "forty eight"
+    49: "forty nine"
+    50: "fifty"
+    51: "fifty one"
+    52: "fifty two"
+    53: "fifty three"
+    54: "fifty four"
+    55: "fifty five"
+    56: "fifty six"
+    57: "fifty seven"
+    58: "fifty eight"
+    59: "fifty nine"
+
+fields:
+  computed:
+    h12: "((hour_24 + 11) % 12) + 1"
+    next_h12: "(h12 % 12) + 1"
+    m_to: "60 - minute"
+    day_period:
+      when_hour_24_lt_12: "am"
+      otherwise: "pm"
+
+modes:
+  operational:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      hundred_hours: ["number_words.{hour_24}", "words.hundred", "words.hours"]
+      zero_pad: ["number_words.{hour_24}", "words.zero", "number_words.{minute}", "words.hours"]
+      full: ["number_words.{hour_24}", "number_words.{minute}", "words.hours"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: hundred_hours
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  broadcast:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock", "words.{period}"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{minute}", "words.{period}"]
+      full: ["number_words.{h12}", "number_words.{minute}", "words.{period}"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  standard:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      zero_pad: ["number_words.{h12}", "words.oh", "number_words.{minute}"]
+      full: ["number_words.{h12}", "number_words.{minute}"]
+
+    rules:
+      - when: {hour_24_eq: 0, minute_eq: 0}
+        pattern: midnight
+      - when: {hour_24_eq: 12, minute_eq: 0}
+        pattern: noon
+      - when: {minute_eq: 0}
+        pattern: oclock
+      - when: {minute_gt: 0, minute_lt: 10}
+        pattern: zero_pad
+      - when: {any: true}
+        pattern: full
+
+  casual:
+    patterns:
+      midnight: ["words.midnight"]
+      noon: ["words.noon"]
+      oclock: ["number_words.{h12}", "words.oclock"]
+      minutes_past: ["number_words.{minute}", "words.past", "number_words.{h12}"]
+      quarter_past: ["words.quarter", "words.past", "number_words.{h12}"]
+      half_to_next: ["words.half", "number_words.{next_h12}"]
+      minutes_to: ["number_words.{m_to}", "words.to", "number_words.{next_h12}"]
+      quarter_to: ["words.quarter", "words.to", "number_words.{next_h12}"]
+      almost: ["words.almost", "number_words.{next_h12}"]
+
+    special_cases:
+      "00:00": midnight
+      "12:00": noon
+
+    minute_map:
+      0: oclock
+      1: oclock
+      2: oclock
+      3: minutes_past
+      4: minutes_past
+      5: minutes_past
+      6: minutes_past
+      7: minutes_past
+      8: quarter_past
+      9: quarter_past
+      10: quarter_past
+      11: quarter_past
+      12: quarter_past
+      13: quarter_past
+      14: quarter_past
+      15: quarter_past
+      16: quarter_past
+      17: quarter_past
+      18: minutes_past
+      19: minutes_past
+      20: minutes_past
+      21: minutes_past
+      22: half_to_next
+      23: half_to_next
+      24: half_to_next
+      25: half_to_next
+      26: half_to_next
+      27: half_to_next
+      28: half_to_next
+      29: half_to_next
+      30: half_to_next
+      31: half_to_next
+      32: half_to_next
+      33: half_to_next
+      34: half_to_next
+      35: half_to_next
+      36: half_to_next
+      37: half_to_next
+      38: minutes_to
+      39: minutes_to
+      40: minutes_to
+      41: minutes_to
+      42: minutes_to
+      43: quarter_to
+      44: quarter_to
+      45: quarter_to
+      46: quarter_to
+      47: quarter_to
+      48: quarter_to
+      49: quarter_to
+      50: minutes_to
+      51: minutes_to
+      52: minutes_to
+      53: minutes_to
+      54: minutes_to
+      55: almost
+      56: almost
+      57: almost
+      58: almost
+      59: almost
+
+examples:
+  "14:30":
+    operational: "fourteen thirty hours"
+    broadcast: "two thirty p m"
+    standard: "two thirty"
+    casual: "half three"
+  "20:48":
+    operational: "twenty forty eight hours"
+    broadcast: "eight forty eight p m"
+    standard: "eight forty eight"
+    casual: "quarter to nine"
+  "08:12":
+    casual: "quarter past eight"
+  "08:56":
+    casual: "almost nine"
