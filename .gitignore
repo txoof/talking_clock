@@ -31,6 +31,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!/clock_code/lib
 lib64/
 parts/
 sdist/
