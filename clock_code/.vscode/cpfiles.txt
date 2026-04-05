@@ -2,4 +2,5 @@ code.py
 menu.py
 pico_rules.py
 voices.py
+menu.json
 lib/*
