@@ -75,14 +75,14 @@ if _debug_boot:
 
 CONFIG_PATH    = "/sd/config.json"
 MENU_PATH      = "/menu.json"
-VOLUME_STEPS   = 10
+VOLUME_STEPS   = 20
 VOLUME_DELAY   = 5.5
 HOLD_SECONDS   = 1.5
 VALUE_REPEAT_INTERVAL = 0.150  # seconds between increments when held
 ALARM_MAX_SECS = 300  # 5 minutes
 
 DEFAULT_CONFIG = {
-    "volume_step":       7,
+    "volume_step":       9,
     "voice":             "en_US_lessac_medium",
     "mode":              "standard",
     "alarm_enabled":     False,
