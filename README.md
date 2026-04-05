@@ -4,6 +4,10 @@ An accessible clock that announces the time on demand or automatically at regula
 
 ![Clock Enclosure Rendering](./enclosure/assets/enclosure_00.png)
 
+## User Manual
+
+Please see the [End User Manual](./User_Manual.md) for operation instructions.
+
 ## Overview
 
 The clock is built around a Raspberry Pi Pico running CircuitPython. Three buttons provide the entire user interface: one to announce the time, and two for navigating settings. All audio is pre-generated and stored on an SD card, making the clock fully offline with no network dependency.

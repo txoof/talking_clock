@@ -1,6 +1,6 @@
 import time
-time.sleep(3)
-print("start")
+time.sleep(1)
+print("clock start up")
 
 import board
 import busio
@@ -21,7 +21,9 @@ from menu import Menu
 from debug_mode import check_debug_boot, run_debug_mode
 import pico_rules
 
-VERSION = "0.4.0"
+
+VERSION = "0.4.1"
+
 
 # --- Debug boot check (must run before keypad.Keys takes GP6) ---
 
@@ -419,6 +421,11 @@ print_status()
 h, m = now()
 print(f"RTC time: {h:02d}:{m:02d}")
 
+if len(alarm_tones) > 1:
+    play_path(alarm_tones[1]["path"])
+h, m = now()
+# play_sequence(h, m)
+print("Boot completed - starting operation")
 # --- Main loop ---
 
 while True:
