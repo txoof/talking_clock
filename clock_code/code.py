@@ -99,6 +99,7 @@ def load_config():
         for k, v in DEFAULT_CONFIG.items():
             if k not in data:
                 data[k] = v
+        data["volume_step"] = max(1, data.get("volume_step", DEFAULT_CONFIG["volume_step"]))
         return data
     except Exception:
         return dict(DEFAULT_CONFIG)
@@ -503,7 +504,7 @@ while True:
                         if key == PLUS:
                             volume_step = min(VOLUME_STEPS, volume_step + 1)
                         else:
-                            volume_step = max(0, volume_step - 1)
+                            volume_step = max(1, volume_step - 1)
                         mixer.voice[0].level = volume_step / VOLUME_STEPS
                         print(f"Volume: {volume_step}/{VOLUME_STEPS}")
                         play_boop()
