@@ -2,7 +2,7 @@
 
 An accessible clock that announces the time on demand or automatically at regular intervals. Designed to be built from off-the-shelf components and localized to any language that has a [Piper TTS](https://github.com/rhasspy/piper) voice model.
 
-![Clock Enclosure Rendering](./enclosure/assets/enclosure_00.png)
+![Clock Enclosure](./images/20260407-PXL_20260407_115826027.RAW-02.ORIGINAL-Pixel%207%20Pro.jpg)
 
 ## User Manual
 
