@@ -234,7 +234,7 @@ venv_activate
 .jupyter_kernelspec
 # END PYENV_UTILITIES MANAGED BLOCK
 # BEGIN PYENV_UTILITIES MANAGED BLOCK
-/talking_clock-venv-9aeab2f407
+/talking_clock-venv*/**
 venv_activate
 .jupyter_kernelspec
 # END PYENV_UTILITIES MANAGED BLOCK
